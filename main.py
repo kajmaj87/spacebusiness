@@ -1,12 +1,12 @@
 import esper
 
-from entities import createPerson
-from processors import TurnSummaryProcessor, Consumption, Production
+from entities import create_person
+from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange
 
 
 def createEntities(world):
     for name in ["Jacek", "Wacek", "Placek"]:
-        createPerson(world, name, 0.5, len(name)/2)
+        create_person(world, name, 0.5, len(name) / 2)
 
 
 def init():
@@ -14,6 +14,8 @@ def init():
     createEntities(new_world)
     new_world.add_processor(Consumption())
     new_world.add_processor(Production())
+    new_world.add_processor(Ordering())
+    new_world.add_processor(Exchange())
     new_world.add_processor(TurnSummaryProcessor())
     return new_world
 

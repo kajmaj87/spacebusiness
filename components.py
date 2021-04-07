@@ -20,6 +20,10 @@ class ResourcePile:
     def __str__(self):
         return f"{self.amount} {self.resource_type}"
 
+    def is_nothing(self):
+        return self.amount == 0 or self.resource_type == Resource.NOTHING
+
+
 class Details:
     def __init__(self, name):
         self.name = name
@@ -37,7 +41,7 @@ class Storage:
         if self.will_fit(pile):
             self.stored_resources[pile.resource_type] += pile.amount
         else:
-            raise Exception(f"Attemted to overfill storage with {pile}")
+            raise Exception(f"Attempted to overfill storage with {pile}")
 
     def set_limit(self, pile: ResourcePile):
         self.limit[pile.resource_type] = pile.amount
@@ -54,6 +58,11 @@ class Storage:
 
     def has_at_least(self, pile: ResourcePile):
         return self.amount(pile.resource_type) >= pile.amount
+
+class Wallet:
+    def __init__(self, money):
+        self.money = money
+
 
 class Consumer:
     def __init__(self, needs: ResourcePile):
@@ -73,3 +82,23 @@ class Producer:
 
     def created_pile(self):
         return self.gives
+
+
+class SellOrder:
+    def __init__(self, owner, pile: ResourcePile, minimum_bid: float):
+        self.owner = owner
+        self.pile = pile
+        self.minimum_bid = minimum_bid
+
+    def __str__(self):
+        return f"SellOrder: {self.pile} for at least {self.minimum_bid}cr"
+
+
+class BuyOrder:
+    def __init__(self, owner, pile: ResourcePile, maximum_bid: float):
+        self.owner = owner
+        self.pile = pile
+        self.maximum_bid = maximum_bid
+
+    def __str__(self):
+        return f"BuyOrder: {self.pile} for {self.maximum_bid}cr at maximum"
