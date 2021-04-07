@@ -3,15 +3,22 @@ from enum import Enum
 
 
 class Resource(Enum):
+    NOTHING = -1
     MAN_DAY = 0
     FOOD = 1
     LUXURY = 2
 
+    def __str__(self):
+        return f"{self.name}"
+
 
 class ResourcePile:
-    def __init__(self, resource_type: Resource, amount_needed: float):
+    def __init__(self, resource_type: Resource, amount_needed: float = 0):
         self.resource_type = resource_type
         self.amount = amount_needed
+
+    def __str__(self):
+        return f"{self.amount} {self.resource_type}"
 
 class Details:
     def __init__(self, name):
@@ -21,31 +28,48 @@ class Details:
 class Storage:
     def __init__(self):
         self.stored_resources = defaultdict(float)
+        self.limit = dict()
 
     def amount(self, resource_type):
         return self.stored_resources[resource_type]
 
-    def add(self, resource_type, amount):
-        self.stored_resources[resource_type] += amount
-
-    def remove(self, resource_type, amount):
-        if self.amount(resource_type) >= amount:
-            self.stored_resources[resource_type] -= amount
+    def add(self, pile: ResourcePile):
+        if self.will_fit(pile):
+            self.stored_resources[pile.resource_type] += pile.amount
         else:
-            raise Exception(f"Attempted to remove more resources then there were available for {resource_type} (amount: {amount})")
+            raise Exception(f"Attemted to overfill storage with {pile}")
+
+    def set_limit(self, pile: ResourcePile):
+        self.limit[pile.resource_type] = pile.amount
+
+    def will_fit(self, pile: ResourcePile):
+        type = pile.resource_type
+        return type not in self.limit or self.amount(type) + pile.amount <= self.limit[type]
+
+    def remove(self, pile: ResourcePile):
+        if self.has_at_least(pile):
+            self.stored_resources[pile.resource_type] -= pile.amount
+        else:
+            raise Exception(f"Attempted to remove more resources then there were available for {pile})")
+
+    def has_at_least(self, pile: ResourcePile):
+        return self.amount(pile.resource_type) >= pile.amount
 
 class Consumer:
     def __init__(self, needs: ResourcePile):
         self.needs = needs
 
-    def resource_type(self):
-        return self.needs.resource_type
-
-    def needed_amount(self):
-        return self.needs.amount
+    def needed_pile(self):
+        return self.needs
 
 
 class Producer:
     def __init__(self, needs: ResourcePile, gives: ResourcePile):
         self.needs = needs
         self.gives = gives
+
+    def needed_pile(self):
+        return self.needs
+
+    def created_pile(self):
+        return self.gives

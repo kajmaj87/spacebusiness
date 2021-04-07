@@ -1,6 +1,6 @@
 import esper
 
-from components import Storage, Consumer, Details
+from components import Storage, Consumer, Details, Producer
 
 
 class TurnSummaryProcessor(esper.Processor):
@@ -19,9 +19,26 @@ class Consumption(esper.Processor):
         print(f"Consumption starting.")
         consumers = self.world.get_components(Details, Storage, Consumer)
         for ent, (details, storage, consumer) in consumers:
-            if(storage.amount(consumer.resource_type()) >= consumer.needed_amount()):
-                storage.remove(consumer.resource_type(), consumer.needed_amount())
-                print(f"Removed {consumer.needed_amount()} of {consumer.resource_type()} from {details.name}")
+            if storage.has_at_least(consumer.needed_pile()):
+                storage.remove(consumer.needed_pile())
+                print(f"Removed {consumer.needed_pile()} from {details.name}")
             else:
-                print(f"{details.name} had not enough {consumer.resource_type()} to remove (has: {storage.amount(consumer.resource_type())}, needed {consumer.needed_amount()})")
+                print(f"Consumer {details.name} did not have {consumer.needed_pile()}")
 
+
+class Production(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        print(f"Production starting")
+        producers = self.world.get_components(Details, Storage, Producer)
+        for ent, (details, storage, producer) in producers:
+            if not storage.has_at_least(producer.needed_pile()):
+                print(f"Producer {details.name} did not have {producer.needed_pile()} to start production")
+            elif not storage.will_fit(producer.created_pile()):
+                print(f"Producer {details.name} did not have place to hold {producer.created_pile()}")
+            else:
+                storage.remove(producer.needed_pile())
+                storage.add(producer.created_pile())
+                print(f"Producer {details.name} produced {producer.created_pile()}")
