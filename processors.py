@@ -3,7 +3,7 @@ from random import random
 import esper
 import statistics
 
-from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet
+from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource
 
 
 class TurnSummaryProcessor(esper.Processor):
@@ -66,7 +66,7 @@ class Ordering(esper.Processor):
                 print(f"{details.name} did not order {pile} (no storage space left)")
             elif wallet.money < max_bid_price:
                 print(
-                    f"{details.name} did not affort {max_bid_price}cr to order {pile}. Has only {wallet.money}cr left")
+                    f"{details.name} did not affort {max_bid_price:.2f}cr to order {pile}. Has only {wallet.money:.2f}cr left")
             else:
                 wallet.money -= max_bid_price
                 buy_order = create_buy_order(owner, pile, max_bid_price)
@@ -107,6 +107,7 @@ class Ordering(esper.Processor):
                 sell_order = create_sell_order(ent, producer.created_pile(), min_bid_price)
                 print(f"{details.name} created a {sell_order}")
 
+
 class Exchange(esper.Processor):
     def __init__(self):
         super().__init__()
@@ -115,23 +116,24 @@ class Exchange(esper.Processor):
         print("\nExchange Phase started.")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
-        eligible_sell, eligible_buy = self.eligible_orders(sell_orders, buy_orders)
         self.report_orders(sell_orders, "sell orders")
         self.report_orders(buy_orders, " buy orders")
-        self.report_orders(eligible_sell, "eligible sell orders")
-        self.report_orders(eligible_buy, " eligible buy orders")
-        if len(eligible_sell) < len(eligible_buy):
-            self.report_orders(eligible_sell, "chosen sell")
-            self.report_orders(eligible_buy[:-len(eligible_sell)], " chosen buy")
-            order_pairs = zip(eligible_buy[:-len(eligible_sell)], eligible_sell)
-        else:
-            self.report_orders(eligible_sell[:len(eligible_buy)], "chosen sell")
-            self.report_orders(eligible_buy, " chosen buy")
-            order_pairs = zip(eligible_buy, eligible_sell[:len(eligible_buy)])
-        self.process_orders(order_pairs)
+        for resource_type in Resource:
+            print(f"Processing orders for {resource_type}")
+            eligible_sell, eligible_buy = self.eligible_orders(sell_orders, buy_orders, resource_type)
+            self.report_orders(eligible_sell, "eligible sell orders")
+            self.report_orders(eligible_buy, " eligible buy orders")
+            if len(eligible_sell) < len(eligible_buy):
+                self.report_orders(eligible_sell, "chosen sell")
+                self.report_orders(eligible_buy[:-len(eligible_sell)], " chosen buy")
+                order_pairs = zip(eligible_buy[:-len(eligible_sell)], eligible_sell)
+            else:
+                self.report_orders(eligible_sell[:len(eligible_buy)], "chosen sell")
+                self.report_orders(eligible_buy, " chosen buy")
+                order_pairs = zip(eligible_buy, eligible_sell[:len(eligible_buy)])
+            self.process_orders(order_pairs)
 
     def process_orders(self, order_pairs):
-        #print(list(order_pairs))
         for buy, sell in order_pairs:
             buy_ent, buy_order = buy
             sell_ent, sell_order = sell
@@ -146,11 +148,21 @@ class Exchange(esper.Processor):
         else:
             print(f"{name}: None")
 
-    def eligible_orders(self, sell_orders, buy_orders):
-        max_buy = max([o.price for ent, o in buy_orders])
-        min_sell = min([o.price for ent, o in sell_orders])
-        return sorted([(ent, o) for ent, o in sell_orders if o.price <= max_buy], key=lambda x: x[1].price), sorted(
-            [(ent, o) for ent, o in buy_orders if o.price >= min_sell], key=lambda x: x[1].price)
+    def eligible_orders(self, sell_orders, buy_orders, resource_type):
+        filtered_sells = [(ent, o) for ent, o in sell_orders if o.pile.resource_type == resource_type]
+        filtered_buys = [(ent, o) for ent, o in buy_orders if o.pile.resource_type == resource_type]
+
+        if len(filtered_buys) == 0 or len(filtered_sells) == 0:
+            return [], []
+
+        max_buy = max(filtered_buys, key=lambda x: x[1].price)[1].price
+        min_sell = min(filtered_sells, key=lambda x: x[1].price)[1].price
+        return sorted(
+            [(ent, o) for ent, o in filtered_sells if o.price <= max_buy],
+            key=lambda x: x[1].price), sorted(
+            [(ent, o) for ent, o in filtered_buys if o.price >= min_sell],
+            key=lambda x: x[1].price)
+
 
 def gain_resource_pile_from_order(world, order_ent, order, new_owner):
     owner_name = world.component_for_entity(order.owner, Details).name
@@ -159,21 +171,22 @@ def gain_resource_pile_from_order(world, order_ent, order, new_owner):
     world.delete_entity(order_ent)
     if new_owner != order.owner:
         new_owner_name = world.component_for_entity(new_owner, Details).name
-        print(f"{new_owner_name} gained {order.pile} from {owner_name}")
+        print(f"{owner_name} gained {order.pile} from {new_owner_name}")
     else:
         print(f"{owner_name} gained {order.pile} back as the order for {order.price:.2f}cr was cancelled")
+
 
 def gain_money_from_order(world, order_ent, order, new_order):
     owner_name = world.component_for_entity(order.owner, Details).name
     world.component_for_entity(order.owner, Wallet).money += order.price
-    half_price_diff = (new_order.price - order.price)/2
+    half_price_diff = (new_order.price - order.price) / 2
     # both get half of the price difference, the buyer already payed more in advance so he gets a refund
     world.component_for_entity(order.owner, Wallet).money += half_price_diff
     world.component_for_entity(new_order.owner, Wallet).money += half_price_diff
     world.delete_entity(order_ent)
     if new_order != order:
         new_owner_name = world.component_for_entity(new_order.owner, Details).name
-        print(f"{new_owner_name} gained {order.price:.2f}cr + {half_price_diff:.2f}cr  from {owner_name}")
+        print(f"{owner_name} gained {order.price:.2f}cr + {half_price_diff:.2f}cr from {new_owner_name}")
     else:
         print(f"{owner_name} gained {order.price:.2f}cr back as the order for {order.pile} was cancelled")
 
