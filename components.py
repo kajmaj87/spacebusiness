@@ -91,7 +91,10 @@ class SellOrder:
         self.price = price
 
     def __str__(self):
-        return f"SellOrder: {self.pile} for at least {self.price}cr"
+        return f"SellOrder: {self.pile} for at least {self.price:.2f}cr"
+
+    def __repr__(self):
+        return f"Sell: {self.pile} for {self.price:.2f}cr"
 
 
 class BuyOrder:
@@ -101,4 +104,7 @@ class BuyOrder:
         self.price = price
 
     def __str__(self):
-        return f"BuyOrder: {self.pile} for {self.price}cr at maximum"
+        return f"BuyOrder: {self.pile} for {self.price:.2f}cr at maximum"
+
+    def __repr__(self):
+        return f"Buy: {self.pile} for {self.price:.2f}cr"
