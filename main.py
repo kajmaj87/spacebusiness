@@ -1,7 +1,7 @@
 import esper
 
 from entities import create_person
-from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange
+from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange, OrderCancellation
 
 
 def createEntities(world):
@@ -16,6 +16,7 @@ def init():
     new_world.add_processor(Production())
     new_world.add_processor(Ordering())
     new_world.add_processor(Exchange())
+    new_world.add_processor(OrderCancellation())
     new_world.add_processor(TurnSummaryProcessor())
     return new_world
 

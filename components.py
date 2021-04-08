@@ -85,20 +85,20 @@ class Producer:
 
 
 class SellOrder:
-    def __init__(self, owner, pile: ResourcePile, minimum_bid: float):
+    def __init__(self, owner, pile: ResourcePile, price: float):
         self.owner = owner
         self.pile = pile
-        self.minimum_bid = minimum_bid
+        self.price = price
 
     def __str__(self):
-        return f"SellOrder: {self.pile} for at least {self.minimum_bid}cr"
+        return f"SellOrder: {self.pile} for at least {self.price}cr"
 
 
 class BuyOrder:
-    def __init__(self, owner, pile: ResourcePile, maximum_bid: float):
+    def __init__(self, owner, pile: ResourcePile, price: float):
         self.owner = owner
         self.pile = pile
-        self.maximum_bid = maximum_bid
+        self.price = price
 
     def __str__(self):
-        return f"BuyOrder: {self.pile} for {self.maximum_bid}cr at maximum"
+        return f"BuyOrder: {self.pile} for {self.price}cr at maximum"
