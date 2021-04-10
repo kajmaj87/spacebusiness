@@ -5,6 +5,7 @@ import statistics
 
 from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource, \
     Needs, OrderStatus, Need
+from transaction_logger import log_transactions
 
 
 class Consumption(esper.Processor):
@@ -73,13 +74,16 @@ class Ordering(esper.Processor):
                 print(f"{details.name} won't buy nothing so not placing an order")
             elif not storage.will_fit(pile):
                 print(f"{details.name} did not order {pile} (no storage space left)")
-            elif wallet.money < max_bid_price:
-                print(
-                    f"{details.name} did not affort {max_bid_price:.2f}cr to order {pile}. Has only {wallet.money:.2f}cr left")
             else:
-                wallet.money -= max_bid_price
-                buy_order = create_buy_order(owner, pile, max_bid_price)
-                print(f"{details.name} created a {buy_order}")
+                if 0 < wallet.money < max_bid_price:
+                    print(f"{details.name} did not affort {max_bid_price:.2f}cr to order {pile}. Has only {wallet.money:.2f}cr left. Will bid for this amount instead")
+                bid = min(max_bid_price, wallet.money)
+                if wallet.money > 0:
+                    wallet.money -= bid
+                    buy_order = create_buy_order(owner, pile, bid)
+                    print(f"{details.name} created a {buy_order}")
+                else:
+                    print(f"{details.name} has no money left to create orders")
 
         def create_buy_order(owner, pile: ResourcePile, max_bid_price: float):
             buy_order_ent = self.world.create_entity()
@@ -112,7 +116,7 @@ class Ordering(esper.Processor):
                     f"{details.name} failed to sell {resource_type} for {last_price:.2f}cr. Will try to sell for {bid_price:.2f}cr")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
-        return bid_price
+        return max(bid_price, 0.01) # TODO make it more sensible, wallet should take all transactions from last turn into account
 
     def create_sell_orders(self):
         def create_sell_order(owner, pile: ResourcePile, min_bid_price: float):
@@ -135,7 +139,27 @@ class Exchange(esper.Processor):
     def __init__(self):
         super().__init__()
 
+    def create_order_pairs(self, buy_orders, sell_orders):
+        if len(sell_orders) < len(buy_orders):
+            order_pairs = zip(buy_orders[len(buy_orders) - len(sell_orders):], sell_orders)
+        else:
+            order_pairs = zip(buy_orders, sell_orders[:len(buy_orders)])
+        return order_pairs
+
     def process(self):
+        def order_pairs_are_valid(buy_orders, sell_orders):
+            for buy, sell in self.create_order_pairs(buy_orders, sell_orders):
+                _, buy_order = buy
+                _, sell_order = sell
+                if buy_order.price < sell_order.price:
+                    print(f"Order Pair: {buy_order} / {sell_order} is invalid.")
+                    return False
+            return True
+
+        def fix_orders(buy, sell):
+            print("Fixing orders")
+            return buy[1:], sell
+
         print("\nExchange Phase started.")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
@@ -150,18 +174,21 @@ class Exchange(esper.Processor):
             self.report_orders(filtered_sells, "sell orders")
             self.report_orders(filtered_buys, " buy orders")
             eligible_sell, eligible_buy = self.eligible_orders(filtered_sells, filtered_buys)
-            if len(eligible_sell) < len(eligible_buy):
-                self.report_orders(eligible_sell, "chosen sell")
-                self.report_orders(eligible_buy[len(eligible_buy) - len(eligible_sell):], " chosen buy")
-                order_pairs = zip(eligible_buy[len(eligible_buy) - len(eligible_sell):], eligible_sell)
-            else:
-                self.report_orders(eligible_sell[:len(eligible_buy)], "chosen sell")
-                self.report_orders(eligible_buy, " chosen buy")
-                order_pairs = zip(eligible_buy, eligible_sell[:len(eligible_buy)])
-            self.process_orders(order_pairs)
+            while not order_pairs_are_valid(eligible_buy, eligible_sell):
+                eligible_buy, eligible_sell = fix_orders(eligible_buy, eligible_sell)
 
-    def process_orders(self, order_pairs):
-        for buy, sell in order_pairs:
+            self.process_orders(eligible_buy, eligible_sell)
+            log_transactions(resource_type, eligible_buy, eligible_sell)
+
+    def process_orders(self, buy_orders, sell_orders):
+        if len(sell_orders) < len(buy_orders):
+            self.report_orders(sell_orders, "chosen sell")
+            self.report_orders(buy_orders[len(buy_orders) - len(sell_orders):], " chosen buy")
+        else:
+            self.report_orders(sell_orders[:len(buy_orders)], "chosen sell")
+            self.report_orders(buy_orders, " chosen buy")
+
+        for buy, sell in self.create_order_pairs(buy_orders, sell_orders):
             buy_ent, buy_order = buy
             sell_ent, sell_order = sell
             if buy_order.price < sell_order.price:
@@ -251,7 +278,7 @@ class TurnSummaryProcessor(esper.Processor):
     def process(self):
         wallets = self.world.get_components(Details, Storage, Wallet)
         total_money = sum([w.money for ent, (d, s, w) in wallets])
-        print(f"Another turn has passed. Total money: {total_money}cr")
+        total_food = sum([s.amount(Resource.FOOD) for ent, (d, s, w) in wallets])
+        print(f"\n\nAnother turn has passed. Total money: {total_money:.2f}cr. Total food: {total_food}")
         for ent, (details, storage, wallets) in wallets:
             print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
-

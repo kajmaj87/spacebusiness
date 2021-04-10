@@ -1,3 +1,5 @@
+import time
+
 import esper
 
 from entities import create_person, create_farm
@@ -5,10 +7,10 @@ from processors import TurnSummaryProcessor, Consumption, Production, Ordering, 
 
 
 def createEntities(world):
-    for name in ["Jacek", "Wacek", "Placek"]:
-        create_person(world, name, 0.5, len(name) / 2)
+    for name in ["Jacek", "Wacek", "Placek", "Gacek", "Macek", "Lacek", "Picek"]:
+        create_person(world, name, 0.5, len(name) / 2, money=10)
     for name in ["Folwark","Kołko Rolnicze"]:
-        create_farm(world, name, labour_consumption=1, food_production=1, food_storage=10, money=30)
+        create_farm(world, name, labour_consumption=1, food_production=1, food_storage=10, money=15)
         
 def init():
     new_world = esper.World()
@@ -27,4 +29,6 @@ if __name__ == '__main__':
 
     while True:
         world.process()
-        input()
+        #input()
+        time.sleep(1)
+
