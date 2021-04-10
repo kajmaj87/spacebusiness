@@ -8,6 +8,7 @@ class Resource(Enum):
     MAN_DAY = 0
     FOOD = 1
     LUXURY = 2
+    WATER = 3
 
     def __str__(self):
         return f"{self.name}"
