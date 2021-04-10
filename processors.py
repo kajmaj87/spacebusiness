@@ -13,14 +13,18 @@ class Consumption(esper.Processor):
         super().__init__()
 
     def process(self):
+        def consume_if_possible(storage: Storage, pile: ResourcePile):
+            if storage.has_at_least(pile):
+                storage.remove(pile)
+                print(f"Removed {pile} from {details.name}")
+            else:
+                print(f"Consumer {details.name} did not have {pile}")
+
         print("\nConsumption Phase started.")
         consumers = self.world.get_components(Details, Storage, Consumer)
         for ent, (details, storage, consumer) in consumers:
-            if storage.has_at_least(consumer.needed_pile()):
-                storage.remove(consumer.needed_pile())
-                print(f"Removed {consumer.needed_pile()} from {details.name}")
-            else:
-                print(f"Consumer {details.name} did not have {consumer.needed_pile()}")
+            for need in consumer.needs:
+                consume_if_possible(storage, need)
 
 
 class Production(esper.Processor):

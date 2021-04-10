@@ -95,12 +95,13 @@ class Wallet:
 
 
 class Consumer:
-    def __init__(self, needs: ResourcePile):
-        self.needs = needs
+    def __init__(self, pile: ResourcePile = None):
+        self.needs = []
+        if pile is not None:
+            self.needs.append(pile)
 
-    def needed_pile(self):
-        return self.needs
-
+    def add_need(self, need: ResourcePile):
+        self.needs.append(need)
 
 class Producer:
     def __init__(self, needs: ResourcePile, gives: ResourcePile):

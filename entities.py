@@ -19,8 +19,10 @@ def create_person(world, name, food_consumption, food_amount, water_consumption,
 
     world.add_component(person, Details(name))
     world.add_component(person, Wallet(money))
-    world.add_component(person, Consumer(ResourcePile(Resource.FOOD, food_consumption)))
-    world.add_component(person, Consumer(ResourcePile(Resource.WATER, water_consumption)))
+    consumption = Consumer()
+    consumption.add_need(ResourcePile(Resource.FOOD, food_consumption))
+    consumption.add_need(ResourcePile(Resource.WATER, water_consumption))
+    world.add_component(person, consumption)
     # man days are produced from nothing
     world.add_component(person, Producer(ResourcePile(Resource.NOTHING), ResourcePile(Resource.MAN_DAY, 1)))
     world.add_component(person, storage)
