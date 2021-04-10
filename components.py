@@ -1,4 +1,5 @@
 from collections import defaultdict
+from sortedcontainers import SortedList
 from enum import Enum
 
 
@@ -7,6 +8,15 @@ class Resource(Enum):
     MAN_DAY = 0
     FOOD = 1
     LUXURY = 2
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+class OrderStatus(Enum):
+    BOUGHT = -1
+    SOLD = 0
+    FAILED = 1
 
     def __str__(self):
         return f"{self.name}"
@@ -34,6 +44,17 @@ class Storage:
         self.stored_resources = defaultdict(float)
         self.limit = dict()
 
+    def __str__(self):
+        contents = []
+        for type, amount in self.stored_resources.items():
+            if amount > 0:
+                limit = f"/{self.limit[type]:.2f}" if type in self.limit else ""
+                contents.append(f"{type}: {amount:.2f}{limit}")
+        if len(contents) > 0:
+            return f"Storage: {', '.join(contents)}"
+        else:
+            return "Storage: EMPTY"
+
     def amount(self, resource_type):
         return self.stored_resources[resource_type]
 
@@ -59,9 +80,17 @@ class Storage:
     def has_at_least(self, pile: ResourcePile):
         return self.amount(pile.resource_type) >= pile.amount
 
+
 class Wallet:
     def __init__(self, money):
         self.money = money
+        self.last_transaction = dict()
+
+    def register_transaction(self, resource_type: Resource, price, status: OrderStatus):
+        self.last_transaction[resource_type] = (price, status)
+
+    def last_transaction_details_for(self, resource_type: Resource):
+        return self.last_transaction[resource_type] if resource_type in self.last_transaction else (None, None)
 
 
 class Consumer:
@@ -82,6 +111,32 @@ class Producer:
 
     def created_pile(self):
         return self.gives
+
+
+class Need:
+    def __init__(self, name, priority, pile: ResourcePile, price_change_on_buy, price_change_on_failed_buy):
+        self.name = name
+        self.priority = priority
+        self.pile = pile
+        self.price_change_on_buy = price_change_on_buy
+        self.price_change_on_failed_buy = price_change_on_failed_buy
+
+    def is_fullfilled(self, storage):
+        return storage.has_at_least(self.pile)
+
+    def resource_type(self):
+        return self.pile.resource_type
+
+
+class Needs:
+    def __init__(self):
+        self.needs = SortedList(key=lambda x: x.priority)
+
+    def add(self, need: Need):
+        self.needs.add(need)
+
+    def __iter__(self):
+        return self.needs.__iter__()
 
 
 class SellOrder:
