@@ -73,25 +73,25 @@ class Ordering(esper.Processor):
         return bid_price
 
     def create_buy_orders(self):
-        def decide_to_place_buy_order(owner, pile: ResourcePile, wallet: Wallet, max_bid_price: float):
-            if pile.is_nothing():
+        def decide_to_place_buy_order(owner, resouce: Resource, wallet: Wallet, max_bid_price: float):
+            if resouce == Resource.NOTHING:
                 print(f"{details.name} won't buy nothing so not placing an order")
-            elif not storage.will_fit(pile):
-                print(f"{details.name} did not order {pile} (no storage space left)")
+            elif not storage.will_fit_one_of(resouce):
+                print(f"{details.name} did not order {resouce} (no storage space left)")
             else:
                 if 0 < wallet.money < max_bid_price:
-                    print(f"{details.name} did not affort {max_bid_price:.2f}cr to order {pile}. Has only {wallet.money:.2f}cr left. Will bid for this amount instead")
+                    print(f"{details.name} did not affort {max_bid_price:.2f}cr to order {resouce}. Has only {wallet.money:.2f}cr left. Will bid for this amount instead")
                 bid = min(max_bid_price, wallet.money)
                 if wallet.money > 0:
                     wallet.money -= bid
-                    buy_order = create_buy_order(owner, pile, bid)
+                    buy_order = create_buy_order(owner, resouce, bid)
                     print(f"{details.name} created a {buy_order}")
                 else:
                     print(f"{details.name} has no money left to create orders")
 
-        def create_buy_order(owner, pile: ResourcePile, max_bid_price: float):
+        def create_buy_order(owner, resource: Resource, max_bid_price: float):
             buy_order_ent = self.world.create_entity()
-            buy_order = BuyOrder(owner, pile, max_bid_price)
+            buy_order = BuyOrder(owner, resource, max_bid_price)
             self.world.add_component(buy_order_ent, buy_order)
             return buy_order
 
@@ -101,7 +101,7 @@ class Ordering(esper.Processor):
                 if not need.is_fullfilled(storage):
                     print(f"{details.name} wants to {need.name}")
                     bid_price = self.decide_order_price_for_needs(details, need, wallet)
-                    decide_to_place_buy_order(ent, ResourcePile(need.pile.resource_type, 1), wallet, bid_price)
+                    decide_to_place_buy_order(ent, need.pile.resource_type, wallet, bid_price)
 
     def decide_order_price_for_sell(self, details, resource_type, wallet):
         last_price, status = wallet.last_transaction_details_for(resource_type)
@@ -123,20 +123,20 @@ class Ordering(esper.Processor):
         return max(bid_price, 0.01) # TODO make it more sensible, wallet should take all transactions from last turn into account
 
     def create_sell_orders(self):
-        def create_sell_order(owner, pile: ResourcePile, min_bid_price: float):
+        def create_sell_order(owner, resource: Resource, min_bid_price: float):
             sell_order_ent = self.world.create_entity()
-            sell_order = SellOrder(owner, pile, min_bid_price)
+            sell_order = SellOrder(owner, resource, min_bid_price)
             self.world.add_component(sell_order_ent, sell_order)
             return sell_order
 
         producers = self.world.get_components(Details, Storage, Producer, Wallet)
         for ent, (details, storage, producer, wallet) in producers:
-            while storage.has_at_least(producer.created_pile()):
-                storage.remove(producer.created_pile())
+            while storage.has_one_of(producer.created_pile()):
+                storage.remove_one_of(producer.created_pile())
                 bid_price = self.decide_order_price_for_sell(details, producer.created_pile().resource_type, wallet)
-                sell_order = create_sell_order(ent, producer.created_pile(), bid_price)
+                sell_order = create_sell_order(ent, producer.created_pile().resource_type, bid_price)
                 print(f"{details.name} created a {sell_order}")
-            print(f"{details.name} won't sell {producer.created_pile()} as it does not have enough of it")
+            print(f"{details.name} won't sell {producer.created_pile().resource_type} as it does not have enough of it")
 
 
 class Exchange(esper.Processor):
@@ -170,8 +170,8 @@ class Exchange(esper.Processor):
         self.report_orders(sell_orders, "sell orders")
         self.report_orders(buy_orders, " buy orders")
         for resource_type in Resource:
-            filtered_sells = [(ent, o) for ent, o in sell_orders if o.pile.resource_type == resource_type]
-            filtered_buys = [(ent, o) for ent, o in buy_orders if o.pile.resource_type == resource_type]
+            filtered_sells = [(ent, o) for ent, o in sell_orders if o.resource == resource_type]
+            filtered_buys = [(ent, o) for ent, o in buy_orders if o.resource == resource_type]
             if len(filtered_buys) == 0 and len(filtered_sells) == 0:
                 continue
             print(f"Processing orders for {resource_type}")
@@ -222,20 +222,20 @@ class Exchange(esper.Processor):
 
 def register_transaction(world, order, status: OrderStatus):
     wallet = world.component_for_entity(order.owner, Wallet)
-    wallet.register_transaction(order.pile.resource_type, order.price, status)
+    wallet.register_transaction(order.resource, order.price, status)
 
 
 def gain_resource_pile_from_order(world, order_ent, order, new_order):
     owner_name = world.component_for_entity(order.owner, Details).name
     owner_storage = world.component_for_entity(order.owner, Storage)
-    owner_storage.add(order.pile)
+    owner_storage.add_one_of(order.resource)
     world.delete_entity(order_ent)
     if new_order != order.owner:
         new_owner_name = world.component_for_entity(new_order.owner, Details).name
-        print(f"{owner_name} gained {order.pile} from {new_owner_name}")
+        print(f"{owner_name} gained {order.resource} from {new_owner_name}")
         register_transaction(world, new_order, OrderStatus.BOUGHT)
     else:
-        print(f"{owner_name} gained {order.pile} back as the order for {order.price:.2f}cr was cancelled")
+        print(f"{owner_name} gained {order.resource} back as the order for {order.price:.2f}cr was cancelled")
         register_transaction(world, order, OrderStatus.FAILED)
 
 
@@ -252,7 +252,7 @@ def gain_money_from_order(world, order_ent, order, new_order):
         print(f"{owner_name} gained {order.price:.2f}cr + {half_price_diff:.2f}cr from {new_owner_name}")
         register_transaction(world, order, OrderStatus.SOLD)
     else:
-        print(f"{owner_name} gained {order.price:.2f}cr back as the order for {order.pile} was cancelled")
+        print(f"{owner_name} gained {order.price:.2f}cr back as the order for {order.resource} was cancelled")
         register_transaction(world, order, OrderStatus.FAILED)
 
 
@@ -282,7 +282,10 @@ class TurnSummaryProcessor(esper.Processor):
     def process(self):
         wallets = self.world.get_components(Details, Storage, Wallet)
         total_money = sum([w.money for ent, (d, s, w) in wallets])
-        total_food = sum([s.amount(Resource.FOOD) for ent, (d, s, w) in wallets])
-        print(f"\n\nAnother turn has passed. Total money: {total_money:.2f}cr. Total food: {total_food}")
         for ent, (details, storage, wallets) in wallets:
-            print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
+            #print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
+            pass
+        print(f"\n\n Total money: {total_money:.2f}cr.")
+        for resource in Resource:
+            total = sum([s.amount(resource) for ent, (d, s, w) in self.world.get_components(Details, Storage, Wallet)])
+            print(f"Total {resource}:  {total}")

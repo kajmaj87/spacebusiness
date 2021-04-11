@@ -1,4 +1,5 @@
 import time
+from random import random
 
 import esper
 
@@ -7,13 +8,15 @@ from processors import TurnSummaryProcessor, Consumption, Production, Ordering, 
 
 
 def createEntities(world):
-    for name in ["Jacek", "Wacek", "Placek", "Gacek", "Macek", "Lacek", "Picek"]:
-        create_person(world, name, food_consumption=0.5, food_amount=len(name) / 2, water_amount=3, water_consumption=0.25,
+    #for name in ["Jacek", "Wacek", "Placek", "Gacek", "Macek", "Lacek", "Picek"]:
+    for i in range(100):
+        create_person(world, f"MAN-{i}", food_consumption=0.5, food_amount=int(random()*10), water_amount=3, water_consumption=0.25,
                       money=10)
-    for name in ["Folwark", "Kołko Rolnicze"]:
-        create_farm(world, name, labour_consumption=1, food_production=1, food_storage=10, money=15)
-    for name in ["MPWiK", "Cisowianka"]:
-        create_well(world, name, labour_consumption=1, water_production=10, water_storage=100, money=10)
+    #for name in ["Folwark", "Kołko Rolnicze"]:
+    for i in range(20):
+        create_farm(world, f"Farm-{i}", labour_consumption=1, food_production=1, food_storage=10, money=15)
+    for i in range(6):
+        create_well(world, f"Well-{i}", labour_consumption=1, water_production=10, water_storage=100, money=10)
 
 
 def init():
@@ -33,5 +36,5 @@ if __name__ == '__main__':
 
     while True:
         world.process()
-        # input()
-        time.sleep(1)
+        #input()
+        #time.sleep(1)

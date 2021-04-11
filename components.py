@@ -65,6 +65,12 @@ class Storage:
         else:
             raise Exception(f"Attempted to overfill storage with {pile}")
 
+    def add_one_of(self, resource: Resource):
+        if self.will_fit_one_of(resource):
+            self.stored_resources[resource] += 1
+        else:
+            raise Exception(f"Attempted to overfill storage with {resource}")
+
     def set_limit(self, pile: ResourcePile):
         self.limit[pile.resource_type] = pile.amount
 
@@ -72,14 +78,26 @@ class Storage:
         type = pile.resource_type
         return type not in self.limit or self.amount(type) + pile.amount <= self.limit[type]
 
+    def will_fit_one_of(self, resource: Resource):
+        return resource not in self.limit or self.amount(resource) + 1 <= self.limit[resource]
+
     def remove(self, pile: ResourcePile):
         if self.has_at_least(pile):
             self.stored_resources[pile.resource_type] -= pile.amount
         else:
             raise Exception(f"Attempted to remove more resources then there were available for {pile})")
 
+    def remove_one_of(self, pile: ResourcePile):
+        if self.has_one_of(pile):
+            self.stored_resources[pile.resource_type] -= 1
+        else:
+            raise Exception(f"Attempted to remove more resources then there were available for {pile})")
+
     def has_at_least(self, pile: ResourcePile):
         return self.amount(pile.resource_type) >= pile.amount
+
+    def has_one_of(self, pile: ResourcePile):
+        return self.amount(pile.resource_type) >= 1
 
 
 class Wallet:
@@ -142,26 +160,26 @@ class Needs:
 
 
 class SellOrder:
-    def __init__(self, owner, pile: ResourcePile, price: float):
+    def __init__(self, owner, resource: Resource, price: float):
         self.owner = owner
-        self.pile = pile
+        self.resource = resource
         self.price = price
 
     def __str__(self):
-        return f"SellOrder: {self.pile} for at least {self.price:.2f}cr"
+        return f"SellOrder: {self.resource} for at least {self.price:.2f}cr"
 
     def __repr__(self):
-        return f"Sell: {self.pile} for {self.price:.2f}cr"
+        return f"Sell: {self.resource} for {self.price:.2f}cr"
 
 
 class BuyOrder:
-    def __init__(self, owner, pile: ResourcePile, price: float):
+    def __init__(self, owner, resource: Resource, price: float):
         self.owner = owner
-        self.pile = pile
+        self.resource = resource
         self.price = price
 
     def __str__(self):
-        return f"BuyOrder: {self.pile} for {self.price:.2f}cr at maximum"
+        return f"BuyOrder: {self.resource} for {self.price:.2f}cr at maximum"
 
     def __repr__(self):
-        return f"Buy: {self.pile} for {self.price:.2f}cr"
+        return f"Buy: {self.resource} for {self.price:.2f}cr"
