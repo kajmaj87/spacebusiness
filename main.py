@@ -3,8 +3,9 @@ from random import random
 
 import esper
 
+from components import StatsHistory, StarDate
 from entities import create_person, create_farm, create_well
-from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange, OrderCancellation
+from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange, OrderCancellation, Timeflow
 
 
 def createEntities(world):
@@ -18,10 +19,16 @@ def createEntities(world):
     for i in range(6):
         create_well(world, f"Well-{i}", labour_consumption=1, water_production=10, water_storage=100, money=10)
 
+def createGlobalEntities(world):
+    globals = world.create_entity()
+    world.add_component(globals, StarDate())
+    world.add_component(globals, StatsHistory())
 
 def init():
     new_world = esper.World()
     createEntities(new_world)
+    createGlobalEntities(new_world)
+    new_world.add_processor(Timeflow())
     new_world.add_processor(Consumption())
     new_world.add_processor(Production())
     new_world.add_processor(Ordering())
@@ -36,5 +43,5 @@ if __name__ == '__main__':
 
     while True:
         world.process()
-        #input()
+        input()
         #time.sleep(1)

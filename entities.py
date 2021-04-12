@@ -1,6 +1,5 @@
 from components import Consumer, ResourcePile, Resource, Details, Storage, Producer, SellOrder, Wallet, Needs, Need
 
-
 def create_person(world, name, food_consumption, food_amount, water_consumption, water_amount, money):
     person = world.create_entity()
     storage = Storage()

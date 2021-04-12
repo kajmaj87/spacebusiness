@@ -1,6 +1,16 @@
-from collections import defaultdict
+import statistics
+from collections import defaultdict, namedtuple
 from sortedcontainers import SortedList
 from enum import Enum
+
+
+class OrderType(Enum):
+    BUY = 0
+    SELL = 1
+    TRANSACTION = 2
+
+    def __str__(self):
+        return f"{self.name}"
 
 
 class Resource(Enum):
@@ -12,7 +22,6 @@ class Resource(Enum):
 
     def __str__(self):
         return f"{self.name}"
-
 
 class OrderStatus(Enum):
     BOUGHT = -1
@@ -121,6 +130,7 @@ class Consumer:
     def add_need(self, need: ResourcePile):
         self.needs.append(need)
 
+
 class Producer:
     def __init__(self, needs: ResourcePile, gives: ResourcePile):
         self.needs = needs
@@ -183,3 +193,68 @@ class BuyOrder:
 
     def __repr__(self):
         return f"Buy: {self.resource} for {self.price:.2f}cr"
+
+
+Stat = namedtuple('Stat', ['resource', 'order_type', 'length', 'min', 'median', 'max'])
+
+
+class StarDate:
+
+    START_YEAR = 2200
+    TURNS_IN_YEAR = 50
+
+    def __init__(self):
+        self.time = 0
+
+    def increase(self):
+        self.time += 1
+
+    def __str__(self):
+        return f"SD {self.START_YEAR + self.time//self.TURNS_IN_YEAR}.{self.time % self.TURNS_IN_YEAR}"
+
+
+class StatsHistory:
+    def __init__(self):
+        self.history = {}
+
+    def register_day_transactions(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
+        self.history[(date, resource)] = StatsForDay(resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions)
+
+    def stats_for_day(self, date: StarDate, resource: Resource):
+        return self.history[(date, resource)]
+
+    def has_stats_for_day(self, date: StarDate, resource: Resource):
+        return (date, resource) in self.history
+
+
+class StatsForDay:
+    def __init__(self, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
+        self.fulfilled_sell = self.calculate_base_stats(resource, OrderType.SELL, fulfilled_sell)
+        self.fulfilled_buy = self.calculate_base_stats(resource, OrderType.BUY, fulfilled_buy)
+        self.transactions = self.calculate_stats_for_prices(resource, OrderType.TRANSACTION, transactions)
+
+        self.sell_stats = self.calculate_base_stats(resource, OrderType.SELL, all_sell)
+        self.buy_stats = self.calculate_base_stats(resource, OrderType.BUY, all_buy)
+        self.resource = resource
+        self.total = self.buy_stats.length + self.sell_stats.length
+
+    def __str__(self):
+        buy, sell, transactions= "", "", ""
+        if self.transactions.length > 0:
+           transactions = f"T:{self.transactions.min:.2f}/{self.transactions.median:.2f}/{self.transactions.max:.2f}"
+        if self.buy_stats.length > 0:
+            buy = f"B:{self.buy_stats.min:.2f}/{self.buy_stats.max:.2f}"
+        if self.sell_stats.length > 0:
+            sell = f"S:{self.sell_stats.min:.2f}/{self.sell_stats.max:.2f}"
+        return f"{self.resource} #B {self.buy_stats.length} #S {self.sell_stats.length} #T {self.transactions.length} {buy} {transactions} {sell}"
+
+    def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices):
+        if len(prices) > 0:
+            median = statistics.median(prices)
+            return Stat(resource=resource, order_type=order_type, length=len(prices), min=min(prices), median=median, max=max(prices))
+        else:
+            return Stat(resource=resource, order_type=order_type, length=len(prices), min=None, median=None, max=None)
+
+    def calculate_base_stats(self, resource: Resource, order_type: OrderType, orders):
+        prices = [o.price for ent, o in orders]
+        return self.calculate_stats_for_prices(resource, order_type, prices)

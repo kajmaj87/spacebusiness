@@ -4,8 +4,18 @@ import esper
 import statistics
 
 from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource, \
-    Needs, OrderStatus, Need
+    Needs, OrderStatus, Need, StatsHistory, StarDate
 from transaction_logger import log_transactions
+import globals
+
+
+class Timeflow(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        globals.star_date.increase()
+        print(f"It is now {globals.star_date}")
 
 
 class Consumption(esper.Processor):
@@ -80,7 +90,8 @@ class Ordering(esper.Processor):
                 print(f"{details.name} did not order {resouce} (no storage space left)")
             else:
                 if 0 < wallet.money < max_bid_price:
-                    print(f"{details.name} did not affort {max_bid_price:.2f}cr to order {resouce}. Has only {wallet.money:.2f}cr left. Will bid for this amount instead")
+                    print(
+                        f"{details.name} did not affort {max_bid_price:.2f}cr to order {resouce}. Has only {wallet.money:.2f}cr left. Will bid for this amount instead")
                 bid = min(max_bid_price, wallet.money)
                 if wallet.money > 0:
                     wallet.money -= bid
@@ -120,7 +131,8 @@ class Ordering(esper.Processor):
                     f"{details.name} failed to sell {resource_type} for {last_price:.2f}cr. Will try to sell for {bid_price:.2f}cr")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
-        return max(bid_price, 0.01) # TODO make it more sensible, wallet should take all transactions from last turn into account
+        return max(bid_price,
+                   0.01)  # TODO make it more sensible, wallet should take all transactions from last turn into account
 
     def create_sell_orders(self):
         def create_sell_order(owner, resource: Resource, min_bid_price: float):
@@ -181,7 +193,10 @@ class Exchange(esper.Processor):
             while not order_pairs_are_valid(eligible_buy, eligible_sell):
                 eligible_buy, eligible_sell = fix_orders(eligible_buy, eligible_sell)
 
-            self.process_orders(eligible_buy, eligible_sell)
+            transactions = self.process_orders(eligible_buy, eligible_sell)
+            globals.stats_history.register_day_transactions(globals.star_date, resource_type, all_buy=filtered_buys,
+                                                            all_sell=filtered_sells, fulfilled_buy=eligible_buy,
+                                                            fulfilled_sell=eligible_sell, transactions=transactions)
             log_transactions(resource_type, eligible_buy, eligible_sell)
 
     def process_orders(self, buy_orders, sell_orders):
@@ -192,13 +207,19 @@ class Exchange(esper.Processor):
             self.report_orders(sell_orders[:len(buy_orders)], "chosen sell")
             self.report_orders(buy_orders, " chosen buy")
 
+        transactions = []
+
         for buy, sell in self.create_order_pairs(buy_orders, sell_orders):
             buy_ent, buy_order = buy
             sell_ent, sell_order = sell
             if buy_order.price < sell_order.price:
                 raise Exception(f"Attempted to buy at lower price then seller wanted")
             gain_resource_pile_from_order(self.world, buy_ent, buy_order, sell_order)
-            gain_money_from_order(self.world, sell_ent, sell_order, buy_order)
+            transaction_price = gain_money_from_order(self.world, sell_ent, sell_order, buy_order)
+            if transaction_price is not None:
+                transactions.append(transaction_price)
+
+        return transactions
 
     def report_orders(self, orders, name):
         if len(orders) > 0:
@@ -220,9 +241,12 @@ class Exchange(esper.Processor):
             key=lambda x: x[1].price)
 
 
-def register_transaction(world, order, status: OrderStatus):
+def register_transaction(world, order, status: OrderStatus, transaction_price = None):
     wallet = world.component_for_entity(order.owner, Wallet)
-    wallet.register_transaction(order.resource, order.price, status)
+    if transaction_price is not None:
+        wallet.register_transaction(order.resource, transaction_price, status)
+    else:
+        wallet.register_transaction(order.resource, order.price, status)
 
 
 def gain_resource_pile_from_order(world, order_ent, order, new_order):
@@ -233,7 +257,8 @@ def gain_resource_pile_from_order(world, order_ent, order, new_order):
     if new_order != order.owner:
         new_owner_name = world.component_for_entity(new_order.owner, Details).name
         print(f"{owner_name} gained {order.resource} from {new_owner_name}")
-        register_transaction(world, new_order, OrderStatus.BOUGHT)
+        half_price_diff = (new_order.price - order.price) / 2
+        register_transaction(world, new_order, OrderStatus.BOUGHT, order.price + half_price_diff)
     else:
         print(f"{owner_name} gained {order.resource} back as the order for {order.price:.2f}cr was cancelled")
         register_transaction(world, order, OrderStatus.FAILED)
@@ -250,10 +275,12 @@ def gain_money_from_order(world, order_ent, order, new_order):
     if new_order != order:
         new_owner_name = world.component_for_entity(new_order.owner, Details).name
         print(f"{owner_name} gained {order.price:.2f}cr + {half_price_diff:.2f}cr from {new_owner_name}")
-        register_transaction(world, order, OrderStatus.SOLD)
+        register_transaction(world, order, OrderStatus.SOLD, order.price + half_price_diff)
+        return order.price + half_price_diff
     else:
         print(f"{owner_name} gained {order.price:.2f}cr back as the order for {order.resource} was cancelled")
         register_transaction(world, order, OrderStatus.FAILED)
+        return None
 
 
 class OrderCancellation(esper.Processor):
@@ -275,6 +302,14 @@ class OrderCancellation(esper.Processor):
             gain_resource_pile_from_order(self.world, ent, sell_order, sell_order.owner)
 
 
+class StatisticsUpdate(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        pass
+
+
 class TurnSummaryProcessor(esper.Processor):
     def __init__(self):
         super().__init__()
@@ -283,9 +318,11 @@ class TurnSummaryProcessor(esper.Processor):
         wallets = self.world.get_components(Details, Storage, Wallet)
         total_money = sum([w.money for ent, (d, s, w) in wallets])
         for ent, (details, storage, wallets) in wallets:
-            #print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
+            # print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
             pass
-        print(f"\n\n Total money: {total_money:.2f}cr.")
+
+        print(f"\n\nTotal money: {total_money:.2f}cr.")
+        print(f"Prices in {globals.star_date}:")
         for resource in Resource:
-            total = sum([s.amount(resource) for ent, (d, s, w) in self.world.get_components(Details, Storage, Wallet)])
-            print(f"Total {resource}:  {total}")
+            if globals.stats_history.has_stats_for_day(globals.star_date, resource):
+                print(globals.stats_history.stats_for_day(globals.star_date, resource))
