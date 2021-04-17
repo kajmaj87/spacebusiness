@@ -203,11 +203,14 @@ class StarDate:
     START_YEAR = 2200
     TURNS_IN_YEAR = 50
 
-    def __init__(self):
-        self.time = 0
+    def __init__(self, time = 0):
+        self.time = time
 
     def increase(self):
         self.time += 1
+
+    def yesterday(self):
+        return StarDate(self.time - 1)
 
     def __str__(self):
         return f"SD {self.START_YEAR + self.time//self.TURNS_IN_YEAR}.{self.time % self.TURNS_IN_YEAR}"
@@ -218,20 +221,21 @@ class StatsHistory:
         self.history = {}
 
     def register_day_transactions(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
-        self.history[(date, resource)] = StatsForDay(resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions)
+        self.history[(date.time, resource)] = StatsForDay(date, resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions)
 
     def stats_for_day(self, date: StarDate, resource: Resource):
-        return self.history[(date, resource)]
+        return self.history[(date.time, resource)]
 
     def has_stats_for_day(self, date: StarDate, resource: Resource):
-        return (date, resource) in self.history
+        return (date.time, resource) in self.history
 
 
 class StatsForDay:
-    def __init__(self, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
+    def __init__(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
         self.fulfilled_sell = self.calculate_base_stats(resource, OrderType.SELL, fulfilled_sell)
         self.fulfilled_buy = self.calculate_base_stats(resource, OrderType.BUY, fulfilled_buy)
         self.transactions = self.calculate_stats_for_prices(resource, OrderType.TRANSACTION, transactions)
+        self.date = date
 
         self.sell_stats = self.calculate_base_stats(resource, OrderType.SELL, all_sell)
         self.buy_stats = self.calculate_base_stats(resource, OrderType.BUY, all_buy)
@@ -247,6 +251,15 @@ class StatsForDay:
         if self.sell_stats.length > 0:
             sell = f"S:{self.sell_stats.min:.2f}/{self.sell_stats.max:.2f}"
         return f"{self.resource} #B {self.buy_stats.length} #S {self.sell_stats.length} #T {self.transactions.length} {buy} {transactions} {sell}"
+
+    def as_csv(self):
+        buy, sell, transactions= "", "", ""
+        if self.transactions.length > 0:
+            transactions = f"{self.transactions.min:.2f},{self.transactions.median:.2f},{self.transactions.max:.2f}"
+        else:
+            transactions = ",,"
+        return f"{self.date},{self.resource},{self.buy_stats.length},{self.sell_stats.length},{self.transactions.length},{transactions}"
+
 
     def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices):
         if len(prices) > 0:
