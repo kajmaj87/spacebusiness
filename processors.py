@@ -332,7 +332,7 @@ class TurnSummaryProcessor(esper.Processor):
                 print(globals.stats_history.stats_for_day(globals.star_date, resource))
             self.ticker.log_transactions(resource)
 
-        print("Richest enttites:")
+        print("Richest entities:")
         for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet), key=lambda x: -x[1][2].money)[0:5]:
             print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
 
