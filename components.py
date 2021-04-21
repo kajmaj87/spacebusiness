@@ -250,7 +250,7 @@ class StatsForDay:
             buy = f"B:{self.buy_stats.min:.2f}/{self.buy_stats.max:.2f}"
         if self.sell_stats.length > 0:
             sell = f"S:{self.sell_stats.min:.2f}/{self.sell_stats.max:.2f}"
-        return f"{format(self.resource, '<10')} #B {format(self.buy_stats.length, '<4')} #S {format(self.sell_stats.length, '<4')} #T {format(self.transactions.length, '<4')} {format(buy, '<12')} {format(transactions, '<17')} {format(sell, '<15')}"
+        return f"{self.resource:10} #B {self.buy_stats.length:4} #S {self.sell_stats.length:4} #T {self.transactions.length:4} {buy:12} {transactions:17} {sell:15}"
 
     def as_csv(self):
         buy, sell, transactions= "", "", ""
