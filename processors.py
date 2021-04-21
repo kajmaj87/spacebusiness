@@ -1,10 +1,10 @@
 from random import random
 
-import esper
+import esper # type: ignore
 import statistics
 
 from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource, \
-    Needs, OrderStatus, Need
+    Needs, OrderStatus, Need, Money
 from transaction_logger import Ticker
 import globals
 
@@ -12,10 +12,16 @@ import globals
 class Timeflow(esper.Processor):
     def __init__(self):
         super().__init__()
+        self.total_money_at_start = None
 
     def process(self):
         globals.star_date.increase()
         print(f"It is now {globals.star_date}")
+        if self.total_money_at_start is None:
+            self.total_money_at_start = calculate_total_money(self.world)
+        if self.total_money_at_start.creds != calculate_total_money(self.world).creds:
+            raise Exception(f"Total money changed from {self.total_money_at_start} to {calculate_total_money(self.world)}")
+
 
 
 class Consumption(esper.Processor):
@@ -67,44 +73,44 @@ class Ordering(esper.Processor):
     def decide_order_price_for_needs(self, details: Details, need: Need, wallet: Wallet):
         last_price, status = wallet.last_transaction_details_for(need.resource_type())
         if status is None:
-            bid_price = random() * 0.2 * wallet.money
-            print(f"{details.name} knows nothing about prices of {need.resource_type()}. Guessing: {bid_price:.2f}cr")
+            bid_price = wallet.money.multiply(random() * 0.2)
+            print(f"{details.name} knows nothing about prices of {need.resource_type()}. Guessing: {bid_price}")
         else:
             if status == OrderStatus.BOUGHT:
                 bid_price = last_price * need.price_change_on_buy
                 print(
-                    f"{details.name} bought {need.resource_type()} for {last_price:.2f}cr. Will try to order for {bid_price:.2f}cr")
+                    f"{details.name} bought {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
             elif status == OrderStatus.FAILED:
                 if globals.stats_history.has_stats_for_day(globals.star_date.yesterday(), need.resource_type()):
                     yesterday_stats = globals.stats_history.stats_for_day(globals.star_date.yesterday(), need.resource_type())
                     median = yesterday_stats.sell_stats.median
-                    bid_price = last_price + (median - last_price)/2 if median is not None else last_price
+                    bid_price = (median + last_price).split()[0] if median is not None else last_price
 
                 print(
-                    f"{details.name} failed to buy {need.resource_type()} for {last_price:.2f}cr. Will try to order for {bid_price:.2f}cr")
+                    f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
         return bid_price
 
     def create_buy_orders(self):
-        def decide_to_place_buy_order(owner, resouce: Resource, wallet: Wallet, max_bid_price: float):
+        def decide_to_place_buy_order(owner, resouce: Resource, wallet: Wallet, max_bid_price: Money):
             if resouce == Resource.NOTHING:
                 print(f"{details.name} won't buy nothing so not placing an order")
             elif not storage.will_fit_one_of(resouce):
                 print(f"{details.name} did not order {resouce} (no storage space left)")
             else:
-                if 0 < wallet.money < max_bid_price:
+                if wallet.money < max_bid_price:
                     print(
-                        f"{details.name} did not affort {max_bid_price:.2f}cr to order {resouce}. Has only {wallet.money:.2f}cr left. Will bid for this amount instead")
+                        f"{details.name} did not affort {max_bid_price} to order {resouce}. Has only {wallet.money} left. Will bid for this amount instead")
                 bid = min(max_bid_price, wallet.money)
-                if wallet.money > 0:
-                    wallet.money -= bid
+                if wallet.money.creds > 0:
+                    wallet.money.remove(bid)
                     buy_order = create_buy_order(owner, resouce, bid)
                     print(f"{details.name} created a {buy_order}")
                 else:
                     print(f"{details.name} has no money left to create orders")
 
-        def create_buy_order(owner, resource: Resource, max_bid_price: float):
+        def create_buy_order(owner, resource: Resource, max_bid_price: Money) -> BuyOrder:
             buy_order_ent = self.world.create_entity()
             buy_order = BuyOrder(owner, resource, max_bid_price)
             self.world.add_component(buy_order_ent, buy_order)
@@ -118,28 +124,27 @@ class Ordering(esper.Processor):
                     bid_price = self.decide_order_price_for_needs(details, need, wallet)
                     decide_to_place_buy_order(ent, need.pile.resource_type, wallet, bid_price)
 
-    def decide_order_price_for_sell(self, details, resource_type, wallet):
+    def decide_order_price_for_sell(self, details, resource_type, wallet: Wallet) -> Money:
         last_price, status = wallet.last_transaction_details_for(resource_type)
         if status is None:
-            bid_price = random() * 2 + 0.5
-            print(f"{details.name} knows nothing about prices of {resource_type}. Guessing: {bid_price:.2f}cr")
+            bid_price = Money(int(random() * 200 + 50))
+            print(f"{details.name} knows nothing about prices of {resource_type}. Guessing: {bid_price}")
         else:
             if status == OrderStatus.SOLD:
                 # TODO Should be handled more in a way as needs are
-                bid_price = last_price * 1.1
+                bid_price = last_price.multiply(1.1)
                 print(
-                    f"{details.name} sold {resource_type} for {last_price:.2f}cr. Will try to sell for {bid_price:.2f}cr")
+                    f"{details.name} sold {resource_type} for {last_price}. Will try to sell for {bid_price}")
             elif status == OrderStatus.FAILED:
-                bid_price = last_price * 0.9
+                bid_price = last_price.multiply(0.9)
                 print(
-                    f"{details.name} failed to sell {resource_type} for {last_price:.2f}cr. Will try to sell for {bid_price:.2f}cr")
+                    f"{details.name} failed to sell {resource_type} for {last_price}. Will try to sell for {bid_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
-        return max(bid_price,
-                   0.01)  # TODO make it more sensible, wallet should take all transactions from last turn into account
+        return max(bid_price, Money(1))  # TODO make it more sensible, wallet should take all transactions from last turn into account
 
     def create_sell_orders(self):
-        def create_sell_order(owner, resource: Resource, min_bid_price: float):
+        def create_sell_order(owner, resource: Resource, min_bid_price: Money) -> SellOrder:
             sell_order_ent = self.world.create_entity()
             sell_order = SellOrder(owner, resource, min_bid_price)
             self.world.add_component(sell_order_ent, sell_order)
@@ -222,12 +227,13 @@ class Exchange(esper.Processor):
             if transaction_price is not None:
                 transactions.append(transaction_price)
 
+        print_total_money(self.world, "After orders where processed")
         return transactions
 
     def report_orders(self, orders, name):
         if len(orders) > 0:
-            mean = statistics.mean([order.price for ent, order in orders])
-            prices = ", ".join([f"{p:0.2f}" for p in sorted([order.price for ent, order in orders])])
+            mean = statistics.mean([order.price.creds for ent, order in orders])
+            prices = ", ".join([f"{p}" for p in sorted([order.price for ent, order in orders])])
             print(f"{name}: {prices} (mean: {mean:.2f})")
         else:
             print(f"{name}: None")
@@ -260,28 +266,28 @@ def gain_resource_pile_from_order(world, order_ent, order, new_order):
     if new_order != order.owner:
         new_owner_name = world.component_for_entity(new_order.owner, Details).name
         #print(f"{owner_name} gained {order.resource} from {new_owner_name}")
-        half_price_diff = (new_order.price - order.price) / 2
-        register_transaction(world, new_order, OrderStatus.BOUGHT, order.price + half_price_diff)
+        first_half, second_half = (new_order.price + order.price).split()
+        register_transaction(world, new_order, OrderStatus.BOUGHT, second_half)
     else:
-        #print(f"{owner_name} gained {order.resource} back as the order for {order.price:.2f}cr was cancelled")
+        #print(f"{owner_name} gained {order.resource} back as the order for {order.price} was cancelled")
         register_transaction(world, order, OrderStatus.FAILED)
 
 
 def gain_money_from_order(world, order_ent, order, new_order):
     owner_name = world.component_for_entity(order.owner, Details).name
     world.component_for_entity(order.owner, Wallet).money += order.price
-    half_price_diff = (new_order.price - order.price) / 2
+    first_half_price_diff, second_half_price_diff = (new_order.price - order.price).split()
     # both get half of the price difference, the buyer already payed more in advance so he gets a refund
-    world.component_for_entity(order.owner, Wallet).money += half_price_diff
-    world.component_for_entity(new_order.owner, Wallet).money += half_price_diff
+    world.component_for_entity(order.owner, Wallet).money += first_half_price_diff
+    world.component_for_entity(new_order.owner, Wallet).money += second_half_price_diff
     world.delete_entity(order_ent)
     if new_order != order:
         new_owner_name = world.component_for_entity(new_order.owner, Details).name
         #print(f"{owner_name} gained {order.price:.2f}cr + {half_price_diff:.2f}cr from {new_owner_name}")
-        register_transaction(world, order, OrderStatus.SOLD, order.price + half_price_diff)
-        return order.price + half_price_diff
+        register_transaction(world, order, OrderStatus.SOLD, order.price + second_half_price_diff)
+        return order.price + second_half_price_diff
     else:
-        #print(f"{owner_name} gained {order.price:.2f}cr back as the order for {order.resource} was cancelled")
+        #print(f"{owner_name} gained {order.price} back as the order for {order.resource} was cancelled")
         register_transaction(world, order, OrderStatus.FAILED)
         return None
 
@@ -293,6 +299,7 @@ class OrderCancellation(esper.Processor):
     def process(self):
         self.world._clear_dead_entities()
         print("\nOrder Cancellation Phase started.")
+        print_total_money(self.world, "Before Cancellation")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
         print(f"Locks will be released for {len(sell_orders)} sell and {len(buy_orders)} buy orders still on market")
@@ -304,6 +311,8 @@ class OrderCancellation(esper.Processor):
             # we return resources back as the order didn't happen
             gain_resource_pile_from_order(self.world, ent, sell_order, sell_order.owner)
 
+        print_total_money(self.world, "After Cancellation")
+
 
 class StatisticsUpdate(esper.Processor):
     def __init__(self):
@@ -312,6 +321,13 @@ class StatisticsUpdate(esper.Processor):
     def process(self):
         pass
 
+def print_total_money(world, where):
+    total_money = calculate_total_money(world)
+    print(f"\n\nTotal money: {total_money}. ({where})")
+
+def calculate_total_money(world):
+    wallets = world.get_components(Details, Storage, Wallet)
+    return Money(sum([w.money.creds for ent, (d, s, w) in wallets]))
 
 class TurnSummaryProcessor(esper.Processor):
     def __init__(self):
@@ -319,13 +335,7 @@ class TurnSummaryProcessor(esper.Processor):
         self.ticker = Ticker()
 
     def process(self):
-        wallets = self.world.get_components(Details, Storage, Wallet)
-        total_money = sum([w.money for ent, (d, s, w) in wallets])
-        for ent, (details, storage, wallets) in wallets:
-            # print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
-            pass
-
-        print(f"\n\nTotal money: {total_money:.2f}cr.")
+        print_total_money(self.world, "Turn end")
         print(f"Prices in {globals.star_date}:")
         for resource in Resource:
             if globals.stats_history.has_stats_for_day(globals.star_date, resource):
@@ -333,6 +343,6 @@ class TurnSummaryProcessor(esper.Processor):
             self.ticker.log_transactions(resource)
 
         print("Richest enttites:")
-        for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet), key=lambda x: -x[1][2].money)[0:5]:
-            print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
+        for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet), key=lambda x: -x[1][2].money.creds)[0:5]:
+            print(f"{details.name} has {wallets.money} left. Storage: {storage}")
 

@@ -1,6 +1,8 @@
 import statistics
 from collections import defaultdict, namedtuple
-from sortedcontainers import SortedList
+from typing import Dict, Tuple, List
+
+from sortedcontainers import SortedList # type: ignore
 from enum import Enum
 
 
@@ -22,6 +24,7 @@ class Resource(Enum):
 
     def __str__(self):
         return f"{self.name}"
+
 
 class OrderStatus(Enum):
     BOUGHT = -1
@@ -109,12 +112,63 @@ class Storage:
         return self.amount(pile.resource_type) >= 1
 
 
-class Wallet:
-    def __init__(self, money):
-        self.money = money
-        self.last_transaction = dict()
+class Money:
 
-    def register_transaction(self, resource_type: Resource, price, status: OrderStatus):
+    def __init__(self, creds: int):
+        if not isinstance(creds, int):
+            raise TypeError(f"Expected {int} but got {type(creds)}")
+
+        self.creds = creds
+
+    def __str__(self):
+        return f"{self.creds}cr"
+
+    def __lt__(self, other):
+        return self.creds < other.creds
+
+    def __le__(self, other):
+        return self.creds <= other.creds
+
+    def __gt__(self, other):
+        return self.creds > other.creds
+
+    def __int__(self):
+        return self.creds
+
+    def __add__(self, other: 'Money') -> 'Money':
+        return Money(self.creds + other.creds)
+
+    def __sub__(self, other: 'Money') -> 'Money':
+        if self < other:
+            raise Exception("Money cannot become negative")
+        return Money(self.creds - other.creds)
+
+    def multiply(self, multiplier: float) -> 'Money':
+        return Money(int(self.creds * multiplier))
+
+    def split(self) -> Tuple['Money', 'Money']:
+        result = (Money(self.creds // 2 + self.creds % 2), Money(self.creds // 2))
+        assert result[0].creds + result[1].creds == self.creds
+        return result
+
+    def remove(self, money: 'Money') -> 'Money':
+        if not isinstance(money, Money):
+            raise TypeError(f"Expected {Money} but got {type(money)}")
+        else:
+            return Money(self.creds - money.creds)
+
+
+class Wallet:
+
+    def __init__(self, money: Money):
+        if not isinstance(money, Money):
+            raise TypeError(f"Expected {Money} but got {type(money)}")
+        self.money = money
+        self.last_transaction: Dict[Resource, Tuple[Money, OrderStatus]] = dict()
+
+    def register_transaction(self, resource_type: Resource, price: Money, status: OrderStatus):
+        if not isinstance(price, Money):
+            raise TypeError(f"Expected {Money} but got {type(price)}")
         self.last_transaction[resource_type] = (price, status)
 
     def last_transaction_details_for(self, resource_type: Resource):
@@ -170,40 +224,43 @@ class Needs:
 
 
 class SellOrder:
-    def __init__(self, owner, resource: Resource, price: float):
+    def __init__(self, owner, resource: Resource, price: Money):
+        if not isinstance(price, Money):
+            raise TypeError(f"Expected {Money} but got {type(price)}")
         self.owner = owner
         self.resource = resource
         self.price = price
 
     def __str__(self):
-        return f"SellOrder: {self.resource} for at least {self.price:.2f}cr"
+        return f"SellOrder: {self.resource} for at least {self.price}"
 
     def __repr__(self):
-        return f"Sell: {self.resource} for {self.price:.2f}cr"
+        return f"Sell: {self.resource} for {self.price}"
 
 
 class BuyOrder:
-    def __init__(self, owner, resource: Resource, price: float):
+    def __init__(self, owner, resource: Resource, price: Money):
+        if not isinstance(price, Money):
+            raise TypeError(f"Expected {Money} but got {type(price)}")
         self.owner = owner
         self.resource = resource
         self.price = price
 
     def __str__(self):
-        return f"BuyOrder: {self.resource} for {self.price:.2f}cr at maximum"
+        return f"BuyOrder: {self.resource} for {self.price} at maximum"
 
     def __repr__(self):
-        return f"Buy: {self.resource} for {self.price:.2f}cr"
+        return f"Buy: {self.resource} for {self.price}"
 
 
 Stat = namedtuple('Stat', ['resource', 'order_type', 'length', 'min', 'median', 'max'])
 
 
 class StarDate:
-
     START_YEAR = 2200
     TURNS_IN_YEAR = 50
 
-    def __init__(self, time = 0):
+    def __init__(self, time=0):
         self.time = time
 
     def increase(self):
@@ -213,15 +270,17 @@ class StarDate:
         return StarDate(self.time - 1)
 
     def __str__(self):
-        return f"SD {self.START_YEAR + self.time//self.TURNS_IN_YEAR}.{self.time % self.TURNS_IN_YEAR}"
+        return f"SD {self.START_YEAR + self.time // self.TURNS_IN_YEAR}.{self.time % self.TURNS_IN_YEAR}"
 
 
 class StatsHistory:
     def __init__(self):
         self.history = {}
 
-    def register_day_transactions(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
-        self.history[(date.time, resource)] = StatsForDay(date, resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions)
+    def register_day_transactions(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy,
+                                  fulfilled_sell, transactions):
+        self.history[(date.time, resource)] = StatsForDay(date, resource, all_buy, all_sell, fulfilled_buy,
+                                                          fulfilled_sell, transactions)
 
     def stats_for_day(self, date: StarDate, resource: Resource):
         return self.history[(date.time, resource)]
@@ -231,7 +290,8 @@ class StatsHistory:
 
 
 class StatsForDay:
-    def __init__(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions):
+    def __init__(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell,
+                 transactions):
         self.fulfilled_sell = self.calculate_base_stats(resource, OrderType.SELL, fulfilled_sell)
         self.fulfilled_buy = self.calculate_base_stats(resource, OrderType.BUY, fulfilled_buy)
         self.transactions = self.calculate_stats_for_prices(resource, OrderType.TRANSACTION, transactions)
@@ -243,28 +303,28 @@ class StatsForDay:
         self.total = self.buy_stats.length + self.sell_stats.length
 
     def __str__(self):
-        buy, sell, transactions= "", "", ""
+        buy, sell, transactions = "", "", ""
         if self.transactions.length > 0:
-           transactions = f"T:{self.transactions.min:.2f}/{self.transactions.median:.2f}/{self.transactions.max:.2f}"
+            transactions = f"T:{self.transactions.min}/{self.transactions.median}/{self.transactions.max}"
         if self.buy_stats.length > 0:
-            buy = f"B:{self.buy_stats.min:.2f}/{self.buy_stats.max:.2f}"
+            buy = f"B:{self.buy_stats.min}/{self.buy_stats.max}"
         if self.sell_stats.length > 0:
-            sell = f"S:{self.sell_stats.min:.2f}/{self.sell_stats.max:.2f}"
+            sell = f"S:{self.sell_stats.min}/{self.sell_stats.max}"
         return f"{self.resource} #B {self.buy_stats.length} #S {self.sell_stats.length} #T {self.transactions.length} {buy} {transactions} {sell}"
 
     def as_csv(self):
-        buy, sell, transactions= "", "", ""
+        buy, sell, transactions = "", "", ""
         if self.transactions.length > 0:
-            transactions = f"{self.transactions.min:.2f},{self.transactions.median:.2f},{self.transactions.max:.2f}"
+            transactions = f"{self.transactions.min},{self.transactions.median},{self.transactions.max}"
         else:
             transactions = ",,"
         return f"{self.date},{self.resource},{self.buy_stats.length},{self.sell_stats.length},{self.transactions.length},{transactions}"
 
-
-    def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices):
+    def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices: List[Money]):
         if len(prices) > 0:
-            median = statistics.median(prices)
-            return Stat(resource=resource, order_type=order_type, length=len(prices), min=min(prices), median=median, max=max(prices))
+            median = Money(statistics.median_low([p.creds for p in prices]))
+            return Stat(resource=resource, order_type=order_type, length=len(prices), min=min(prices), median=median,
+                        max=max(prices))
         else:
             return Stat(resource=resource, order_type=order_type, length=len(prices), min=None, median=None, max=None)
 
