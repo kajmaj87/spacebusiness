@@ -8,6 +8,7 @@ from components import Storage, Consumer, Details, Producer, SellOrder, Resource
 from transaction_logger import Ticker
 import globals
 
+from style import printHeader, printSummary
 
 class Timeflow(esper.Processor):
     def __init__(self):
@@ -23,18 +24,18 @@ class Consumption(esper.Processor):
         super().__init__()
 
     def process(self):
-        def consume_if_possible(storage: Storage, pile: ResourcePile):
+        def consume_if_possible(storage: Storage, pile: ResourcePile, consumer: Consumer):
             if storage.has_at_least(pile):
                 storage.remove(pile)
                 print(f"Removed {pile} from {details.name}")
             else:
                 print(f"Consumer {details.name} did not have {pile}")
 
-        print("\nConsumption Phase started.")
+        printHeader("\U0001F37D Consumption Phase started.")
         consumers = self.world.get_components(Details, Storage, Consumer)
         for ent, (details, storage, consumer) in consumers:
             for need in consumer.needs:
-                consume_if_possible(storage, need)
+                consume_if_possible(storage, need, consumer)
 
 
 class Production(esper.Processor):
@@ -42,7 +43,7 @@ class Production(esper.Processor):
         super().__init__()
 
     def process(self):
-        print(f"\nProduction Phase started")
+        printHeader("\U0001F3ED Production Phase started.")
         producers = self.world.get_components(Details, Storage, Producer)
         for ent, (details, storage, producer) in producers:
             while storage.has_at_least(producer.needed_pile()) and storage.will_fit(producer.created_pile()):
@@ -60,7 +61,7 @@ class Ordering(esper.Processor):
         super().__init__()
 
     def process(self):
-        print("\nOrdering Phase started")
+        printHeader("\U0001F6D2 Ordering Phase started.")
         self.create_sell_orders()
         self.create_buy_orders()
 
@@ -180,7 +181,7 @@ class Exchange(esper.Processor):
             print("Fixing orders")
             return buy[1:], sell
 
-        print("\nExchange Phase started.")
+        printHeader("\U0001F4B1 Exchange Phase started.")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
         self.report_orders(sell_orders, "sell orders")
@@ -292,7 +293,7 @@ class OrderCancellation(esper.Processor):
 
     def process(self):
         self.world._clear_dead_entities()
-        print("\nOrder Cancellation Phase started.")
+        printHeader("❌ Order Cancellation Phase started.")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
         print(f"Locks will be released for {len(sell_orders)} sell and {len(buy_orders)} buy orders still on market")
@@ -325,14 +326,15 @@ class TurnSummaryProcessor(esper.Processor):
             # print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
             pass
 
-        print(f"\n\nTotal money: {total_money:.2f}cr.")
+        print("_"* 50)
+        printSummary(f"\U0001F4B0 Total money: {total_money:.2f}cr.")
         print(f"Prices in {globals.star_date}:")
         for resource in Resource:
             if globals.stats_history.has_stats_for_day(globals.star_date, resource):
                 print(globals.stats_history.stats_for_day(globals.star_date, resource))
             self.ticker.log_transactions(resource)
 
-        print("Richest enttites:")
+        print("Richest entities:")
         for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet), key=lambda x: -x[1][2].money)[0:5]:
-            print(f"{details.name} has {wallets.money:.2f}cr left. Storage: {storage}")
+            print(f"{format(details.name, '<12')} has {wallets.money:.2f}cr left. Storage: {storage}")
 
