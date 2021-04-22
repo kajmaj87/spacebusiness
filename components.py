@@ -61,7 +61,7 @@ class Storage:
                 limit = f"/{self.limit[type]:.2f}" if type in self.limit else ""
                 contents.append(f"{type}: {amount:.2f}{limit}")
         if len(contents) > 0:
-            return f"Storage: {', '.join(contents)}"
+            return f"{', '.join(contents)}"
         else:
             return "Storage: EMPTY"
 
@@ -250,7 +250,7 @@ class StatsForDay:
             buy = f"B:{self.buy_stats.min:.2f}/{self.buy_stats.max:.2f}"
         if self.sell_stats.length > 0:
             sell = f"S:{self.sell_stats.min:.2f}/{self.sell_stats.max:.2f}"
-        return f"{self.resource} #B {self.buy_stats.length} #S {self.sell_stats.length} #T {self.transactions.length} {buy} {transactions} {sell}"
+        return f"{self.resource:10} #B {self.buy_stats.length:4} #S {self.sell_stats.length:4} #T {self.transactions.length:4} {buy:12} {transactions:17} {sell:15}"
 
     def as_csv(self):
         buy, sell, transactions= "", "", ""
