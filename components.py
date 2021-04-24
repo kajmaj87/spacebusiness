@@ -1,5 +1,6 @@
 import statistics
 from collections import defaultdict, namedtuple
+from random import random
 from typing import Dict, Tuple, List
 
 from sortedcontainers import SortedList # type: ignore
@@ -29,7 +30,7 @@ class Resource(Enum):
 class OrderStatus(Enum):
     BOUGHT = -1
     SOLD = 0
-    FAILED = 1
+    CANCELLED = 1
 
     def __str__(self):
         return f"{self.name}"
@@ -123,6 +124,9 @@ class Money:
     def __str__(self):
         return f"{self.creds}cr"
 
+    def __repr__(self):
+        return f"{self.creds}cr"
+
     def __lt__(self, other):
         return self.creds < other.creds
 
@@ -131,6 +135,9 @@ class Money:
 
     def __gt__(self, other):
         return self.creds > other.creds
+
+    def __eq__(self, other):
+        return self.creds == other.creds
 
     def __int__(self):
         return self.creds
@@ -149,7 +156,11 @@ class Money:
     def split(self) -> Tuple['Money', 'Money']:
         result = (Money(self.creds // 2 + self.creds % 2), Money(self.creds // 2))
         assert result[0].creds + result[1].creds == self.creds
-        return result
+        # give last penny out randomly
+        if random() < 0.5:
+            return result
+        else:
+            return result[1], result[0]
 
     def remove(self, money: 'Money') -> 'Money':
         if not isinstance(money, Money):

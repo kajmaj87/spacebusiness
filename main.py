@@ -31,9 +31,9 @@ def createFewEntities(world):
 def create2Entities(world):
     for name in ["Jacek"]:
         create_person(world, f"{name}", food_consumption=0.5, food_amount=int(random()*10), water_amount=3, water_consumption=0.25,
-                      money=10)
+                      money=100)
     for name in ["Folwark"]:
-        create_farm(world, f"{name}", labour_consumption=1, food_production=1, food_storage=10, money=15)
+        create_farm(world, f"{name}", labour_consumption=1, food_production=1, food_storage=10, money=150)
 
 def createGlobalEntities(world):
     globals = world.create_entity()
