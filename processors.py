@@ -213,7 +213,8 @@ class Exchange(esper.Processor):
 
     @icontract.require(lambda buy_order, sell_order: buy_order.price >= sell_order.price)
     @icontract.ensure(lambda result, buy_order, sell_order: result[0] + result[1] == buy_order.price + sell_order.price)
-    def process_transaction(self, buy_ent, buy_order: BuyOrder, sell_ent, sell_order: SellOrder) -> Tuple[Money, Money]:
+    @icontract.ensure(lambda buy_order, sell_order: buy_order.status == OrderStatus.BOUGHT and sell_order.status == OrderStatus.SOLD)
+    def process_transaction(self, buy_order: BuyOrder, sell_order: SellOrder) -> Tuple[Money, Money]:
         if buy_order.price < sell_order.price:
             raise Exception(f"Attempted to buy at lower price then seller wanted")
         transaction_buy_price, transaction_sell_price = (buy_order.price + sell_order.price).split()
@@ -222,9 +223,9 @@ class Exchange(esper.Processor):
         self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price - transaction_buy_price
         self.world.component_for_entity(buy_order.owner, Wallet).register_transaction(sell_order.resource, transaction_buy_price, OrderStatus.BOUGHT)
         self.world.component_for_entity(buy_order.owner, Storage).add_one_of(sell_order.resource)
-
-        self.world.delete_entity(buy_ent)
-        self.world.delete_entity(sell_ent)
+        # Orders are deleted in cleanup phase
+        sell_order.status = OrderStatus.SOLD
+        buy_order.status = OrderStatus.BOUGHT
 
         return transaction_buy_price, transaction_sell_price
 
@@ -239,9 +240,9 @@ class Exchange(esper.Processor):
         transactions = []
 
         for buy, sell in self.create_order_pairs(buy_orders, sell_orders):
-            buy_ent, buy_order = buy
-            sell_ent, sell_order = sell
-            transaction_price = self.process_transaction(buy_ent, buy_order, sell_ent, sell_order)
+            _, buy_order = buy
+            _, sell_order = sell
+            transaction_price = self.process_transaction(buy_order, sell_order)
             if transaction_price is not None:
                 transactions.append(transaction_price)
 

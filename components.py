@@ -235,12 +235,13 @@ class Needs:
 
 
 class SellOrder:
-    def __init__(self, owner, resource: Resource, price: Money):
+    def __init__(self, owner, resource: Resource, price: Money, status: OrderStatus = None):
         if not isinstance(price, Money):
             raise TypeError(f"Expected {Money} but got {type(price)}")
         self.owner = owner
         self.resource = resource
         self.price = price
+        self.status = status
 
     def __str__(self):
         return f"SellOrder: {self.resource} for at least {self.price}"
@@ -250,12 +251,13 @@ class SellOrder:
 
 
 class BuyOrder:
-    def __init__(self, owner, resource: Resource, price: Money):
+    def __init__(self, owner, resource: Resource, price: Money, status: OrderStatus = None):
         if not isinstance(price, Money):
             raise TypeError(f"Expected {Money} but got {type(price)}")
         self.owner = owner
         self.resource = resource
         self.price = price
+        self.status = status
 
     def __str__(self):
         return f"BuyOrder: {self.resource} for {self.price} at maximum"
