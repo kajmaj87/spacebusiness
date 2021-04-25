@@ -11,10 +11,10 @@ def create_person(world, name, food_consumption, food_amount, water_consumption,
     storage.set_limit(ResourcePile(Resource.MAN_DAY, 1))
 
     needs = Needs()
-    needs.add(Need("have water for tomorrow", priority=0, pile=ResourcePile(Resource.WATER, water_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.1))
-    needs.add(Need("have food for tomorrow", priority=1, pile=ResourcePile(Resource.FOOD, food_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.1))
-    needs.add(Need("have water for next few days", priority=2, pile=ResourcePile(Resource.WATER, 5*water_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.1))
-    needs.add(Need("have food for next few days", priority=2, pile=ResourcePile(Resource.FOOD, 4*food_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.1))
+    needs.add(Need("have water for tomorrow", priority=0, pile=ResourcePile(Resource.WATER, water_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.5))
+    needs.add(Need("have food for tomorrow", priority=1, pile=ResourcePile(Resource.FOOD, food_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.5))
+    needs.add(Need("have water for next few days", priority=2, pile=ResourcePile(Resource.WATER, 5*water_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.3))
+    needs.add(Need("have food for next few days", priority=2, pile=ResourcePile(Resource.FOOD, 4*food_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.3))
     needs.add(Need("have a big stash of water", priority=3, pile=ResourcePile(Resource.WATER, 15*water_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.1))
     needs.add(Need("have a big stash of food", priority=3, pile=ResourcePile(Resource.FOOD, 10*food_consumption), price_change_on_buy=0.8, price_change_on_failed_buy=1.1))
 

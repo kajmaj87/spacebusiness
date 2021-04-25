@@ -23,6 +23,7 @@ class Resource(Enum):
     FOOD = 1
     LUXURY = 2
     WATER = 3
+    SOUL = 4
 
     def __str__(self):
         return f"{self.name}"

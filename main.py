@@ -6,7 +6,7 @@ import esper # type: ignore
 from components import StatsHistory, StarDate, Storage, Wallet, InheritancePool, Money, Details
 from entities import create_person, create_farm, create_well
 from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange, OrderCancellation, Timeflow, \
-    Death, InheritanceLottery, Cleanup
+    Death, InheritanceLottery, Cleanup, WealthRedistribution
 
 
 def createManyEntities(world):
@@ -58,6 +58,7 @@ def init():
     new_world.add_processor(Consumption())
     new_world.add_processor(Death())
     new_world.add_processor(InheritanceLottery())
+    new_world.add_processor(WealthRedistribution(0.05))
     new_world.add_processor(TurnSummaryProcessor())
     new_world.add_processor(Cleanup())
     return new_world
