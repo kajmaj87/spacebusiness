@@ -9,11 +9,9 @@ from processors import TurnSummaryProcessor, Consumption, Production, Ordering, 
 
 
 def createManyEntities(world):
-    #for name in ["Jacek", "Wacek", "Placek", "Gacek", "Macek", "Lacek", "Picek"]:
     for i in range(100):
         create_person(world, f"MAN-{i}", food_consumption=0.5, food_amount=int(random()*10), water_amount=3, water_consumption=0.25,
                       money=1000)
-    #for name in ["Folwark", "Kołko Rolnicze"]:
     for i in range(20):
         create_farm(world, f"Farm-{i}", labour_consumption=1, food_production=1, food_storage=10, money=1500)
     for i in range(6):
@@ -42,7 +40,7 @@ def createGlobalEntities(world):
 
 def init():
     new_world = esper.World()
-    createFewEntities(new_world)
+    createManyEntities(new_world)
     createGlobalEntities(new_world)
     new_world.add_processor(Timeflow())
     new_world.add_processor(Consumption())

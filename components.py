@@ -128,7 +128,7 @@ class Money:
         return f"{self.creds}cr"
 
     def __repr__(self):
-        return f"{self.creds}cr"
+        return f"{self.creds}"
 
     def __lt__(self, other):
         return self.creds < other.creds
@@ -333,7 +333,7 @@ class StatsForDay:
 
     def as_csv(self):
         if self.transactions.length > 0:
-            transactions = f"{self.transactions.min},{self.transactions.median},{self.transactions.max}"
+            transactions = f"{self.transactions.min!r},{self.transactions.median!r},{self.transactions.max!r}"
         else:
             transactions = ",,"
         return f"{self.date},{self.resource},{self.buy_stats.length},{self.sell_stats.length},{self.transactions.length},{transactions}"
