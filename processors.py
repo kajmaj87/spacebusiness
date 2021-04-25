@@ -1,4 +1,4 @@
-from random import random
+from random import random, choice
 from typing import Tuple, Union, List
 
 import esper  # type: ignore
@@ -7,7 +7,7 @@ import statistics
 import icontract as icontract
 
 from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource, \
-    Needs, OrderStatus, Need, Money
+    Needs, OrderStatus, Need, Money, Hunger, InheritancePool, Terminated
 from transaction_logger import Ticker
 import globals
 
@@ -24,7 +24,7 @@ class Timeflow(esper.Processor):
             self.total_money_at_start = total_money_in_wallets(self.world)
         if self.total_money_at_start.creds != total_money_in_wallets(self.world).creds:
             raise Exception(
-                f"Total money changed from {self.total_money_at_start} to {total_money_in_wallets(self.world)}")
+                f"Total money changed from {self.total_money_at_start} to {total_money_in_wallets(self.world)}. (diff {self.total_money_at_start.creds - total_money_in_wallets(self.world).creds}cr)")
 
 
 class Consumption(esper.Processor):
@@ -32,18 +32,20 @@ class Consumption(esper.Processor):
         super().__init__()
 
     def process(self):
-        def consume_if_possible(storage: Storage, pile: ResourcePile):
+        def consume_if_possible(ent, storage: Storage, pile: ResourcePile):
             if storage.has_at_least(pile):
                 storage.remove(pile)
                 print(f"Removed {pile} from {details.name}")
             else:
-                print(f"Consumer {details.name} did not have {pile}")
+                print(f"Consumer {details.name} did not have {pile} and will suffer consequences")
+                if pile.resource_type == Resource.FOOD:
+                    self.world.add_component(ent, Hunger())
 
         print("\nConsumption Phase started.")
         consumers = self.world.get_components(Details, Storage, Consumer)
         for ent, (details, storage, consumer) in consumers:
             for need in consumer.needs:
-                consume_if_possible(storage, need)
+                consume_if_possible(ent, storage, need)
 
 
 class Production(esper.Processor):
@@ -89,8 +91,7 @@ class Ordering(esper.Processor):
                     #median = yesterday_stats.sell_stats.median
                     #bid_price = (median + last_price).split()[0] if median is not None else last_price
                     bid_price = max(last_price.multiply(need.price_change_on_failed_buy), last_price + Money(1))
-                    print(
-                        f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
+                    #print( f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
                 else:
                     bid_price = last_price
                     print(
@@ -324,13 +325,43 @@ class OrderCancellation(esper.Processor):
             # we return resources back as the order didn't happen
             self.cancel_sell_order(sell_order)
 
+        # mark all orders for deletion
         for ent, order in self.world.get_component(SellOrder):
-            self.world.delete_entity(ent)
+            self.world.add_component(ent, Terminated())
         for ent, order in self.world.get_component(BuyOrder):
-            self.world.delete_entity(ent)
+            self.world.add_component(ent, Terminated())
 
         print_total_money(self.world, "After Cancellation")
 
+class Death(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        for _, (pool_storage, pool_wallet, _) in self.world.get_components(Storage, Wallet, InheritancePool):
+            for ent, (details, storage, wallet, _) in self.world.get_components(Details, Storage, Wallet, Hunger):
+                print(f"{details.name} died of hunger")
+                pool_storage.add_all(storage)
+                pool_wallet.money += wallet.money
+                self.world.add_component(ent, Terminated())
+            print(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
+
+class InheritanceLottery(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        for _, (pool_storage, pool_wallet, _) in self.world.get_components(Storage, Wallet, InheritancePool):
+            if pool_wallet.money.creds > 0:
+                winner, (details, storage, wallet) = choice(self.world.get_components(Details, Storage, Wallet))
+                half, _ = pool_wallet.money.split()
+                if not self.world.has_component(winner, Terminated):
+                    print(f"{details.name} won {half} at the inheritance lottery!")
+                    wallet.money += half
+                    pool_wallet.money -= half
+                else:
+                    print(f"{details.name} won {half} at the inheritance lottery but was already dead!")
+                print(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
 
 class StatisticsUpdate(esper.Processor):
     def __init__(self):
@@ -346,8 +377,8 @@ def print_total_money(world, where):
 
 
 def total_money_in_wallets(world) -> Money:
-    wallets = world.get_components(Details, Storage, Wallet)
-    return Money(sum([w.money.creds for ent, (d, s, w) in wallets]))
+    wallets = world.get_component(Wallet)
+    return Money(sum([w.money.creds for ent, w in wallets]))
 
 
 def total_money_locked_in_orders(world) -> Money:
@@ -375,4 +406,13 @@ class TurnSummaryProcessor(esper.Processor):
             print(f"{details.name} has {wallets.money} left. Storage: {storage}")
             money_in_rich_pockets += wallets.money
         print(f"Richest have {money_in_rich_pockets} accounting for {money_in_rich_pockets.creds/total_money_in_wallets(self.world).creds*100:.2f}% of total money")
+
+class Cleanup(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        for ent, terminated in self.world.get_component(Terminated):
+            self.world.delete_entity(ent)
+
 

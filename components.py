@@ -57,7 +57,7 @@ class Details:
 
 class Storage:
     def __init__(self):
-        self.stored_resources = defaultdict(float)
+        self.stored_resources = defaultdict(int)
         self.limit = dict()
 
     def __str__(self):
@@ -85,6 +85,10 @@ class Storage:
             self.stored_resources[resource] += 1
         else:
             raise Exception(f"Attempted to overfill storage with {resource}")
+
+    def add_all(self, storage: 'Storage'):
+        for resource in storage.stored_resources:
+            self.add(ResourcePile(resource, storage.stored_resources[resource]))
 
     def set_limit(self, pile: ResourcePile):
         self.limit[pile.resource_type] = pile.amount
@@ -201,6 +205,15 @@ class Consumer:
     def add_need(self, need: ResourcePile):
         self.needs.append(need)
 
+# marker interfaces
+class Hunger:
+    pass
+
+class Terminated:
+    pass
+
+class InheritancePool:
+    pass
 
 class Producer:
     def __init__(self, needs: ResourcePile, gives: ResourcePile):

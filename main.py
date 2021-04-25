@@ -3,14 +3,15 @@ from random import random
 
 import esper # type: ignore
 
-from components import StatsHistory, StarDate
+from components import StatsHistory, StarDate, Storage, Wallet, InheritancePool, Money, Details
 from entities import create_person, create_farm, create_well
-from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange, OrderCancellation, Timeflow
+from processors import TurnSummaryProcessor, Consumption, Production, Ordering, Exchange, OrderCancellation, Timeflow, \
+    Death, InheritanceLottery, Cleanup
 
 
 def createManyEntities(world):
     for i in range(100):
-        create_person(world, f"MAN-{i}", food_consumption=0.5, food_amount=int(random()*10), water_amount=3, water_consumption=0.25,
+        create_person(world, f"MAN-{i}", food_consumption=0.5, food_amount=int(random()*10)+2, water_amount=3, water_consumption=0.25,
                       money=1000)
     for i in range(20):
         create_farm(world, f"Farm-{i}", labour_consumption=1, food_production=1, food_storage=10, money=1500)
@@ -33,22 +34,32 @@ def create2Entities(world):
     for name in ["Folwark"]:
         create_farm(world, f"{name}", labour_consumption=1, food_production=1, food_storage=10, money=1500)
 
+
 def createGlobalEntities(world):
     globals = world.create_entity()
     world.add_component(globals, StarDate())
     world.add_component(globals, StatsHistory())
+    inheritance_pool = world.create_entity()
+    world.add_component(inheritance_pool, Details("Insurance Pool"))
+    world.add_component(inheritance_pool, Storage())
+    world.add_component(inheritance_pool, Wallet(Money(0)))
+    world.add_component(inheritance_pool, InheritancePool())
 
 def init():
     new_world = esper.World()
+    #create2Entities(new_world)
     createManyEntities(new_world)
     createGlobalEntities(new_world)
     new_world.add_processor(Timeflow())
-    new_world.add_processor(Consumption())
     new_world.add_processor(Production())
     new_world.add_processor(Ordering())
     new_world.add_processor(Exchange())
     new_world.add_processor(OrderCancellation())
+    new_world.add_processor(Consumption())
+    new_world.add_processor(Death())
+    new_world.add_processor(InheritanceLottery())
     new_world.add_processor(TurnSummaryProcessor())
+    new_world.add_processor(Cleanup())
     return new_world
 
 
