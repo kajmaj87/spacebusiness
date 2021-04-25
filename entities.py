@@ -39,7 +39,7 @@ def create_well(world, name, labour_consumption, water_production, water_storage
     needs.add(Need("have someone in work", priority=1, pile=ResourcePile(Resource.MAN_DAY, 1), price_change_on_buy=0.9, price_change_on_failed_buy=1.1))
 
     world.add_component(entity, Details(name))
-    world.add_component(entity, Wallet(money))
+    world.add_component(entity, Wallet(Money(money)))
     world.add_component(entity, Producer(ResourcePile(Resource.MAN_DAY, labour_consumption), ResourcePile(Resource.WATER, water_production)))
     world.add_component(entity, storage)
     world.add_component(entity, needs)

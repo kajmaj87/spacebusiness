@@ -1,9 +1,10 @@
 import statistics
 from collections import defaultdict, namedtuple
 from random import random
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Union
 
-from sortedcontainers import SortedList # type: ignore
+import icontract
+from sortedcontainers import SortedList  # type: ignore
 from enum import Enum
 
 
@@ -28,6 +29,7 @@ class Resource(Enum):
 
 
 class OrderStatus(Enum):
+    UNPROCESSED = -2
     BOUGHT = -1
     SOLD = 0
     CANCELLED = 1
@@ -113,6 +115,7 @@ class Storage:
         return self.amount(pile.resource_type) >= 1
 
 
+@icontract.invariant(lambda self: self.creds >= 0, "Money cannot become negative")
 class Money:
 
     def __init__(self, creds: int):
@@ -146,8 +149,6 @@ class Money:
         return Money(self.creds + other.creds)
 
     def __sub__(self, other: 'Money') -> 'Money':
-        if self < other:
-            raise Exception("Money cannot become negative")
         return Money(self.creds - other.creds)
 
     def multiply(self, multiplier: float) -> 'Money':
@@ -177,10 +178,15 @@ class Wallet:
         self.money = money
         self.last_transaction: Dict[Resource, Tuple[Money, OrderStatus]] = dict()
 
+    @icontract.require(lambda status: status != OrderStatus.UNPROCESSED)
     def register_transaction(self, resource_type: Resource, price: Money, status: OrderStatus):
         if not isinstance(price, Money):
             raise TypeError(f"Expected {Money} but got {type(price)}")
         self.last_transaction[resource_type] = (price, status)
+
+    @icontract.require(lambda order: order.status != OrderStatus.UNPROCESSED)
+    def register_order(self, order: Union['BuyOrder', 'SellOrder']):
+        self.last_transaction[order.resource] = (order.price, order.status)
 
     def last_transaction_details_for(self, resource_type: Resource):
         return self.last_transaction[resource_type] if resource_type in self.last_transaction else (None, None)
@@ -235,7 +241,7 @@ class Needs:
 
 
 class SellOrder:
-    def __init__(self, owner, resource: Resource, price: Money, status: OrderStatus = None):
+    def __init__(self, owner, resource: Resource, price: Money, status: OrderStatus = OrderStatus.UNPROCESSED):
         if not isinstance(price, Money):
             raise TypeError(f"Expected {Money} but got {type(price)}")
         self.owner = owner
@@ -251,7 +257,7 @@ class SellOrder:
 
 
 class BuyOrder:
-    def __init__(self, owner, resource: Resource, price: Money, status: OrderStatus = None):
+    def __init__(self, owner, resource: Resource, price: Money, status: OrderStatus = OrderStatus.UNPROCESSED):
         if not isinstance(price, Money):
             raise TypeError(f"Expected {Money} but got {type(price)}")
         self.owner = owner
@@ -291,7 +297,7 @@ class StatsHistory:
         self.history = {}
 
     def register_day_transactions(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy,
-                                  fulfilled_sell, transactions):
+                                  fulfilled_sell, transactions: List[Money]):
         self.history[(date.time, resource)] = StatsForDay(date, resource, all_buy, all_sell, fulfilled_buy,
                                                           fulfilled_sell, transactions)
 
@@ -304,7 +310,7 @@ class StatsHistory:
 
 class StatsForDay:
     def __init__(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell,
-                 transactions):
+                 transactions: List[Money]):
         self.fulfilled_sell = self.calculate_base_stats(resource, OrderType.SELL, fulfilled_sell)
         self.fulfilled_buy = self.calculate_base_stats(resource, OrderType.BUY, fulfilled_buy)
         self.transactions = self.calculate_stats_for_prices(resource, OrderType.TRANSACTION, transactions)
@@ -326,14 +332,13 @@ class StatsForDay:
         return f"{self.resource} #B {self.buy_stats.length} #S {self.sell_stats.length} #T {self.transactions.length} {buy} {transactions} {sell}"
 
     def as_csv(self):
-        buy, sell, transactions = "", "", ""
         if self.transactions.length > 0:
             transactions = f"{self.transactions.min},{self.transactions.median},{self.transactions.max}"
         else:
             transactions = ",,"
         return f"{self.date},{self.resource},{self.buy_stats.length},{self.sell_stats.length},{self.transactions.length},{transactions}"
 
-    def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices: List[Money]):
+    def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices: List[Money]) -> Stat:
         if len(prices) > 0:
             median = Money(statistics.median_low([p.creds for p in prices]))
             return Stat(resource=resource, order_type=order_type, length=len(prices), min=min(prices), median=median,

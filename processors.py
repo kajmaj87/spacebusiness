@@ -1,7 +1,7 @@
 from random import random
-from typing import Tuple
+from typing import Tuple, Union, List
 
-import esper # type: ignore
+import esper  # type: ignore
 import statistics
 
 import icontract as icontract
@@ -21,10 +21,10 @@ class Timeflow(esper.Processor):
         globals.star_date.increase()
         print(f"It is now {globals.star_date}")
         if self.total_money_at_start is None:
-            self.total_money_at_start = calculate_total_money(self.world)
-        if self.total_money_at_start.creds != calculate_total_money(self.world).creds:
-            raise Exception(f"Total money changed from {self.total_money_at_start} to {calculate_total_money(self.world)}")
-
+            self.total_money_at_start = total_money_in_wallets(self.world)
+        if self.total_money_at_start.creds != total_money_in_wallets(self.world).creds:
+            raise Exception(
+                f"Total money changed from {self.total_money_at_start} to {total_money_in_wallets(self.world)}")
 
 
 class Consumption(esper.Processor):
@@ -80,18 +80,21 @@ class Ordering(esper.Processor):
             print(f"{details.name} knows nothing about prices of {need.resource_type()}. Guessing: {bid_price}")
         else:
             if status == OrderStatus.BOUGHT:
-                bid_price = last_price * need.price_change_on_buy
+                bid_price = last_price.multiply(need.price_change_on_buy)
                 print(
                     f"{details.name} bought {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
             elif status == OrderStatus.CANCELLED:
                 if globals.stats_history.has_stats_for_day(globals.star_date.yesterday(), need.resource_type()):
-                    yesterday_stats = globals.stats_history.stats_for_day(globals.star_date.yesterday(), need.resource_type())
+                    yesterday_stats = globals.stats_history.stats_for_day(globals.star_date.yesterday(),
+                                                                          need.resource_type())
                     median = yesterday_stats.sell_stats.median
                     bid_price = (median + last_price).split()[0] if median is not None else last_price
-                    print(f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
+                    print(
+                        f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
                 else:
                     bid_price = last_price
-                    print(f"{details.name} has no info about yesterday prices of {need.resource_type()}. Ordering for last price {last_price}")
+                    print(
+                        f"{details.name} has no info about yesterday prices of {need.resource_type()}. Ordering for last price {last_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
         return bid_price
@@ -145,7 +148,8 @@ class Ordering(esper.Processor):
                     f"{details.name} failed to sell {resource_type} for {last_price}. Will try to sell for {bid_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
-        return max(bid_price, Money(1))  # TODO make it more sensible, wallet should take all transactions from last turn into account
+        return max(bid_price, Money(
+            1))  # TODO make it more sensible, wallet should take all transactions from last turn into account
 
     def create_sell_orders(self):
         def create_sell_order(owner, resource: Resource, min_bid_price: Money) -> SellOrder:
@@ -212,24 +216,32 @@ class Exchange(esper.Processor):
                                                             fulfilled_sell=eligible_sell, transactions=transactions)
 
     @icontract.require(lambda buy_order, sell_order: buy_order.price >= sell_order.price)
-    @icontract.ensure(lambda result, buy_order, sell_order: result[0] + result[1] == buy_order.price + sell_order.price)
-    @icontract.ensure(lambda buy_order, sell_order: buy_order.status == OrderStatus.BOUGHT and sell_order.status == OrderStatus.SOLD)
-    def process_transaction(self, buy_order: BuyOrder, sell_order: SellOrder) -> Tuple[Money, Money]:
+    @icontract.ensure(lambda result, buy_order, sell_order: abs(2*result.creds - (buy_order.price + sell_order.price).creds) <= 1)
+    @icontract.ensure(
+        lambda buy_order, sell_order: buy_order.status == OrderStatus.BOUGHT and sell_order.status == OrderStatus.SOLD)
+    def process_transaction(self, buy_order: BuyOrder, sell_order: SellOrder) -> Money:
         if buy_order.price < sell_order.price:
             raise Exception(f"Attempted to buy at lower price then seller wanted")
-        transaction_buy_price, transaction_sell_price = (buy_order.price + sell_order.price).split()
-        self.world.component_for_entity(sell_order.owner, Wallet).money += transaction_sell_price
-        self.world.component_for_entity(sell_order.owner, Wallet).register_transaction(sell_order.resource, transaction_sell_price, OrderStatus.SOLD)
-        self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price - transaction_buy_price
-        self.world.component_for_entity(buy_order.owner, Wallet).register_transaction(sell_order.resource, transaction_buy_price, OrderStatus.BOUGHT)
+        transaction_price, _ = (buy_order.price + sell_order.price).split()
+        self.world.component_for_entity(sell_order.owner, Wallet).money += transaction_price
+        self.world.component_for_entity(sell_order.owner, Wallet).register_transaction(sell_order.resource,
+                                                                                       transaction_price,
+                                                                                       OrderStatus.SOLD)
+        # buyer gets a refund from what he payed upfront when creating order
+        self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price - transaction_price
+        self.world.component_for_entity(buy_order.owner, Wallet).register_transaction(sell_order.resource,
+                                                                                      transaction_price,
+                                                                                      OrderStatus.BOUGHT)
         self.world.component_for_entity(buy_order.owner, Storage).add_one_of(sell_order.resource)
         # Orders are deleted in cleanup phase
         sell_order.status = OrderStatus.SOLD
         buy_order.status = OrderStatus.BOUGHT
 
-        return transaction_buy_price, transaction_sell_price
+        print(f"{buy_order} and {sell_order} fulfilled for {transaction_price}. Buyer got a return of {buy_order.price - transaction_price}")
 
-    def process_orders(self, buy_orders, sell_orders):
+        return transaction_price
+
+    def process_orders(self, buy_orders, sell_orders) -> List[Money]:
         if len(sell_orders) < len(buy_orders):
             self.report_orders(sell_orders, "chosen sell")
             self.report_orders(buy_orders[len(buy_orders) - len(sell_orders):], " chosen buy")
@@ -268,37 +280,51 @@ class Exchange(esper.Processor):
             [(ent, o) for ent, o in buy_orders if o.price >= min_sell],
             key=lambda x: x[1].price)
 
+
 class OrderCancellation(esper.Processor):
     def __init__(self):
         super().__init__()
 
-    def cancel_buy_order(self, ent, buy_order: BuyOrder):
+    @icontract.require(lambda buy_order: buy_order.status == OrderStatus.UNPROCESSED)
+    @icontract.ensure(lambda buy_order: buy_order.status == OrderStatus.CANCELLED)
+    def cancel_buy_order(self, buy_order: BuyOrder):
         owner_name = self.world.component_for_entity(buy_order.owner, Details).name
         self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price
-        self.world.delete_entity(ent)
+        buy_order.status = OrderStatus.CANCELLED
+        self.world.component_for_entity(buy_order.owner, Wallet).register_order(buy_order)
         print(f"{owner_name} gained {buy_order.price} back as the order for {buy_order.resource} was cancelled")
 
-    def cancel_sell_order(self, ent, sell_order: SellOrder):
+    @icontract.require(lambda sell_order: sell_order.status == OrderStatus.UNPROCESSED)
+    @icontract.ensure(lambda sell_order: sell_order.status == OrderStatus.CANCELLED)
+    def cancel_sell_order(self, sell_order: SellOrder):
         owner_name = self.world.component_for_entity(sell_order.owner, Details).name
         owner_storage = self.world.component_for_entity(sell_order.owner, Storage)
         owner_storage.add_one_of(sell_order.resource)
-        self.world.delete_entity(ent)
+        sell_order.status = OrderStatus.CANCELLED
+        self.world.component_for_entity(sell_order.owner, Wallet).register_order(sell_order)
         print(f"{owner_name} gained {sell_order.resource} back as the order for {sell_order.price} was cancelled")
 
+    @icontract.snapshot(lambda self: self)
+    @icontract.ensure(lambda OLD, self: total_money_locked_in_orders(self.world) + total_money_in_wallets(self.world) == total_money_locked_in_orders(OLD.self.world) + total_money_in_wallets(OLD.self.world))
     def process(self):
-        #self.world._clear_dead_entities()
+        # self.world._clear_dead_entities()
         print("\nOrder Cancellation Phase started.")
         print_total_money(self.world, "Before Cancellation")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
         print(f"Locks will be released for {len(sell_orders)} sell and {len(buy_orders)} buy orders still on market")
-        for ent, buy_order in buy_orders:
+        for ent, buy_order in filter(lambda o: o[1].status == OrderStatus.UNPROCESSED, buy_orders):
             # we return money back as the order didn't happen
-            self.cancel_buy_order(ent, buy_order)
+            self.cancel_buy_order(buy_order)
 
-        for ent, sell_order in sell_orders:
+        for ent, sell_order in filter(lambda o: o[1].status == OrderStatus.UNPROCESSED, sell_orders):
             # we return resources back as the order didn't happen
-            self.cancel_sell_order(ent, sell_order)
+            self.cancel_sell_order(sell_order)
+
+        for ent, order in self.world.get_component(SellOrder):
+            self.world.delete_entity(ent)
+        for ent, order in self.world.get_component(BuyOrder):
+            self.world.delete_entity(ent)
 
         print_total_money(self.world, "After Cancellation")
 
@@ -310,13 +336,21 @@ class StatisticsUpdate(esper.Processor):
     def process(self):
         pass
 
+
 def print_total_money(world, where):
-    total_money = calculate_total_money(world)
+    total_money = total_money_in_wallets(world)
     print(f"\n\nTotal money: {total_money}. ({where})")
 
-def calculate_total_money(world):
+
+def total_money_in_wallets(world) -> Money:
     wallets = world.get_components(Details, Storage, Wallet)
     return Money(sum([w.money.creds for ent, (d, s, w) in wallets]))
+
+
+def total_money_locked_in_orders(world) -> Money:
+    buy_orders = world.get_component(BuyOrder)
+    return Money(sum([o.price.creds for ent, o in buy_orders]))
+
 
 class TurnSummaryProcessor(esper.Processor):
     def __init__(self):
@@ -332,6 +366,6 @@ class TurnSummaryProcessor(esper.Processor):
             self.ticker.log_transactions(resource)
 
         print("Richest enttites:")
-        for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet), key=lambda x: -x[1][2].money.creds)[0:5]:
+        for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet),
+                                                       key=lambda x: -x[1][2].money.creds)[0:5]:
             print(f"{details.name} has {wallets.money} left. Storage: {storage}")
-
