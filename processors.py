@@ -1,4 +1,4 @@
-from random import random, choice
+from random import random, choice, randint
 from typing import Tuple, Union, List
 
 import esper  # type: ignore
@@ -8,6 +8,7 @@ import icontract as icontract
 
 from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource, \
     Needs, OrderStatus, Need, Money, Hunger, InheritancePool, Terminated
+from entities import create_person
 from transaction_logger import Ticker
 import globals
 
@@ -332,6 +333,21 @@ class OrderCancellation(esper.Processor):
             self.world.add_component(ent, Terminated())
 
         print_total_money(self.world, "After Cancellation")
+
+class Maturity(esper.Processor):
+    def __init__(self):
+        super().__init__()
+
+    def process(self):
+        for ent, (details, storage) in self.world.get_components(Details, Storage):
+            if storage.has_one(Resource.GROWN_HUMAN):
+                print(f"{details.name} created a grown human!")
+                storage.remove_one_of(ResourcePile(Resource.GROWN_HUMAN))
+                # FIXME cloning center should also have bought this water
+                # FIXME those values should be constant and same as for other people in the world
+                create_person(self.world, f"Clone-{randint(0,10000)}", food_consumption=0.5, food_amount=5, water_amount=5, water_consumption=0.25, money=0)
+
+
 
 class Death(esper.Processor):
     def __init__(self):

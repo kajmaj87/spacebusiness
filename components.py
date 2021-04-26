@@ -24,6 +24,8 @@ class Resource(Enum):
     LUXURY = 2
     WATER = 3
     SOUL = 4
+    EMBRYO = 5
+    GROWN_HUMAN = 6
 
     def __str__(self):
         return f"{self.name}"
@@ -40,7 +42,7 @@ class OrderStatus(Enum):
 
 
 class ResourcePile:
-    def __init__(self, resource_type: Resource, amount_needed: float = 0):
+    def __init__(self, resource_type: Resource, amount_needed: float = 1):
         self.resource_type = resource_type
         self.amount = amount_needed
 
@@ -54,6 +56,12 @@ class ResourcePile:
 class Details:
     def __init__(self, name):
         self.name = name
+
+    def __str__(self):
+        return f"{self.name}"
+
+    def __repr__(self):
+        return f"Details:{self.name}"
 
 
 class Storage:
@@ -118,6 +126,9 @@ class Storage:
 
     def has_one_of(self, pile: ResourcePile):
         return self.amount(pile.resource_type) >= 1
+
+    def has_one(self, resource: Resource):
+        return self.amount(resource) >= 1
 
 
 @icontract.invariant(lambda self: self.creds >= 0, "Money cannot become negative")
