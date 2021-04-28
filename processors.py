@@ -1,5 +1,6 @@
 from random import random, choice, randint
 from typing import Tuple, Union, List
+from log import log
 
 import esper  # type: ignore
 import statistics
@@ -20,7 +21,7 @@ class Timeflow(esper.Processor):
 
     def process(self):
         globals.star_date.increase()
-        print(f"It is now {globals.star_date}")
+        log.info(f"It is now {globals.star_date}. Total money: {total_money_in_wallets(self.world)}")
         if self.total_money_at_start is None:
             self.total_money_at_start = total_money_in_wallets(self.world)
         if self.total_money_at_start.creds != total_money_in_wallets(self.world).creds:
@@ -36,13 +37,13 @@ class Consumption(esper.Processor):
         def consume_if_possible(ent, storage: Storage, pile: ResourcePile):
             if storage.has_at_least(pile):
                 storage.remove(pile)
-                print(f"Removed {pile} from {details.name}")
+                log.debug(f"Removed {pile} from {details.name}")
             else:
-                print(f"Consumer {details.name} did not have {pile} and will suffer consequences")
+                log.debug(f"Consumer {details.name} did not have {pile} and will suffer consequences")
                 if pile.resource_type == Resource.FOOD:
                     self.world.add_component(ent, Hunger())
 
-        print("\nConsumption Phase started.")
+        log.debug("\nConsumption Phase started.")
         consumers = self.world.get_components(Details, Storage, Consumer)
         for ent, (details, storage, consumer) in consumers:
             for need in consumer.needs:
@@ -54,17 +55,17 @@ class Production(esper.Processor):
         super().__init__()
 
     def process(self):
-        print(f"\nProduction Phase started")
+        log.debug(f"\nProduction Phase started")
         producers = self.world.get_components(Details, Storage, Producer)
         for ent, (details, storage, producer) in producers:
             while storage.has_at_least(producer.needed_pile()) and storage.will_fit(producer.created_pile()):
                 storage.remove(producer.needed_pile())
                 storage.add(producer.created_pile())
-                print(f"Producer {details.name} produced {producer.created_pile()}")
+                log.debug(f"Producer {details.name} produced {producer.created_pile()}")
             if not storage.will_fit(producer.created_pile()):
-                print(f"Producer {details.name} did not have place to hold {producer.created_pile()}")
+                log.debug(f"Producer {details.name} did not have place to hold {producer.created_pile()}")
             if not storage.has_at_least(producer.needed_pile()):
-                print(f"Producer {details.name} did not have {producer.needed_pile()} to start production")
+                log.debug(f"Producer {details.name} did not have {producer.needed_pile()} to start production")
 
 
 class Ordering(esper.Processor):
@@ -72,7 +73,7 @@ class Ordering(esper.Processor):
         super().__init__()
 
     def process(self):
-        print("\nOrdering Phase started")
+        log.debug("\nOrdering Phase started")
         self.create_sell_orders()
         self.create_buy_orders()
 
@@ -80,11 +81,11 @@ class Ordering(esper.Processor):
         last_price, status = wallet.last_transaction_details_for(need.resource_type())
         if status is None:
             bid_price = wallet.money.multiply(random() * 0.2)
-            print(f"{details.name} knows nothing about prices of {need.resource_type()}. Guessing: {bid_price}")
+            log.debug(f"{details.name} knows nothing about prices of {need.resource_type()}. Guessing: {bid_price}")
         else:
             if status == OrderStatus.BOUGHT:
                 bid_price = last_price.multiply(need.price_change_on_buy)
-                print(
+                log.debug(
                     f"{details.name} bought {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
             elif status == OrderStatus.CANCELLED:
                 if globals.stats_history.has_stats_for_day(globals.star_date.yesterday(), need.resource_type()):
@@ -92,10 +93,10 @@ class Ordering(esper.Processor):
                     #median = yesterday_stats.sell_stats.median
                     #bid_price = (median + last_price).split()[0] if median is not None else last_price
                     bid_price = max(last_price.multiply(need.price_change_on_failed_buy), last_price + Money(1))
-                    #print( f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
+                    log.debug( f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
                 else:
                     bid_price = last_price
-                    print(
+                    log.debug(
                         f"{details.name} has no info about yesterday prices of {need.resource_type()}. Ordering for last price {last_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
@@ -104,20 +105,20 @@ class Ordering(esper.Processor):
     def create_buy_orders(self):
         def decide_to_place_buy_order(owner, resouce: Resource, wallet: Wallet, max_bid_price: Money):
             if resouce == Resource.NOTHING:
-                print(f"{details.name} won't buy nothing so not placing an order")
+                log.debug(f"{details.name} won't buy nothing so not placing an order")
             elif not storage.will_fit_one_of(resouce):
-                print(f"{details.name} did not order {resouce} (no storage space left)")
+                log.debug(f"{details.name} did not order {resouce} (no storage space left)")
             else:
                 if wallet.money < max_bid_price:
-                    print(
+                    log.debug(
                         f"{details.name} did not affort {max_bid_price} to order {resouce}. Has only {wallet.money} left. Will bid for this amount instead")
                 bid = min(max_bid_price, wallet.money)
                 if wallet.money.creds > 0:
                     wallet.money -= bid
                     buy_order = create_buy_order(owner, resouce, bid)
-                    print(f"{details.name} created a {buy_order}")
+                    log.debug(f"{details.name} created a {buy_order}")
                 else:
-                    print(f"{details.name} has no money left to create orders")
+                    log.debug(f"{details.name} has no money left to create orders")
 
         def create_buy_order(owner, resource: Resource, max_bid_price: Money) -> BuyOrder:
             buy_order_ent = self.world.create_entity()
@@ -129,7 +130,7 @@ class Ordering(esper.Processor):
         for ent, (details, storage, needs, wallet) in needers:
             for need in needs:
                 if not need.is_fullfilled(storage):
-                    print(f"{details.name} wants to {need.name}")
+                    log.debug(f"{details.name} wants to {need.name}")
                     bid_price = self.decide_order_price_for_buy(details, need, wallet)
                     decide_to_place_buy_order(ent, need.pile.resource_type, wallet, bid_price)
 
@@ -137,17 +138,17 @@ class Ordering(esper.Processor):
         last_price, status = wallet.last_transaction_details_for(resource_type)
         if status is None:
             bid_price = Money(int(random() * 200 + 50))
-            print(f"{details.name} knows nothing about prices of {resource_type}. Guessing: {bid_price}")
+            log.debug(f"{details.name} knows nothing about prices of {resource_type}. Guessing: {bid_price}")
         else:
             if status == OrderStatus.SOLD:
                 # TODO Should be handled more in a way as needs are
                 # don't get stuck at small values
                 bid_price = max(last_price.multiply(1.1), last_price + Money(1))
-                print(
+                log.debug(
                     f"{details.name} sold {resource_type} for {last_price}. Will try to sell for {bid_price}")
             elif status == OrderStatus.CANCELLED:
                 bid_price = last_price.multiply(0.9)
-                print(
+                log.debug(
                     f"{details.name} failed to sell {resource_type} for {last_price}. Will try to sell for {bid_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
@@ -167,8 +168,8 @@ class Ordering(esper.Processor):
                 storage.remove_one_of(producer.created_pile())
                 bid_price = self.decide_order_price_for_sell(details, producer.created_pile().resource_type, wallet)
                 sell_order = create_sell_order(ent, producer.created_pile().resource_type, bid_price)
-                print(f"{details.name} created a {sell_order}")
-            print(f"{details.name} won't sell {producer.created_pile().resource_type} as it does not have enough of it")
+                log.debug(f"{details.name} created a {sell_order}")
+            log.debug(f"{details.name} won't sell {producer.created_pile().resource_type} as it does not have enough of it")
 
 
 class Exchange(esper.Processor):
@@ -190,15 +191,15 @@ class Exchange(esper.Processor):
                 _, buy_order = buy
                 _, sell_order = sell
                 if buy_order.price < sell_order.price:
-                    print(f"Order Pair: {buy_order} / {sell_order} is invalid.")
+                    log.debug(f"Order Pair: {buy_order} / {sell_order} is invalid.")
                     return False
             return True
 
         def fix_orders(buy, sell):
-            print("Fixing orders")
+            log.debug("Fixing orders")
             return buy[1:], sell
 
-        print("\nExchange Phase started.")
+        log.debug("\nExchange Phase started.")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
         self.report_orders(sell_orders, "sell orders")
@@ -208,7 +209,7 @@ class Exchange(esper.Processor):
             filtered_buys = [(ent, o) for ent, o in buy_orders if o.resource == resource_type]
             if len(filtered_buys) == 0 and len(filtered_sells) == 0:
                 continue
-            print(f"Processing orders for {resource_type}")
+            log.debug(f"Processing orders for {resource_type}")
             self.report_orders(filtered_sells, "sell orders")
             self.report_orders(filtered_buys, " buy orders")
             eligible_sell, eligible_buy = self.eligible_orders(filtered_sells, filtered_buys)
@@ -242,7 +243,7 @@ class Exchange(esper.Processor):
         sell_order.status = OrderStatus.SOLD
         buy_order.status = OrderStatus.BOUGHT
 
-        print(f"{buy_order} and {sell_order} fulfilled for {transaction_price}. Buyer got a return of {buy_order.price - transaction_price}")
+        log.debug(f"{buy_order} and {sell_order} fulfilled for {transaction_price}. Buyer got a return of {buy_order.price - transaction_price}")
 
         return transaction_price
 
@@ -270,9 +271,9 @@ class Exchange(esper.Processor):
         if len(orders) > 0:
             mean = statistics.mean([order.price.creds for ent, order in orders])
             prices = ", ".join([f"{p}" for p in sorted([order.price for ent, order in orders])])
-            print(f"{name}: {prices} (mean: {mean:.2f})")
+            log.debug(f"{name}: {prices} (mean: {mean:.2f})")
         else:
-            print(f"{name}: None")
+            log.debug(f"{name}: None")
 
     def eligible_orders(self, sell_orders, buy_orders):
         if len(buy_orders) == 0 or len(sell_orders) == 0:
@@ -297,7 +298,7 @@ class OrderCancellation(esper.Processor):
         self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price
         buy_order.status = OrderStatus.CANCELLED
         self.world.component_for_entity(buy_order.owner, Wallet).register_order(buy_order)
-        #print(f"{owner_name} gained {buy_order.price} back as the order for {buy_order.resource} was cancelled")
+        #log.debug(f"{owner_name} gained {buy_order.price} back as the order for {buy_order.resource} was cancelled")
 
     @icontract.require(lambda sell_order: sell_order.status == OrderStatus.UNPROCESSED)
     @icontract.ensure(lambda sell_order: sell_order.status == OrderStatus.CANCELLED)
@@ -307,17 +308,17 @@ class OrderCancellation(esper.Processor):
         owner_storage.add_one_of(sell_order.resource)
         sell_order.status = OrderStatus.CANCELLED
         self.world.component_for_entity(sell_order.owner, Wallet).register_order(sell_order)
-        #print(f"{owner_name} gained {sell_order.resource} back as the order for {sell_order.price} was cancelled")
+        #log.debug(f"{owner_name} gained {sell_order.resource} back as the order for {sell_order.price} was cancelled")
 
     @icontract.snapshot(lambda self: self)
     @icontract.ensure(lambda OLD, self: total_money_locked_in_orders(self.world) + total_money_in_wallets(self.world) == total_money_locked_in_orders(OLD.self.world) + total_money_in_wallets(OLD.self.world))
     def process(self):
         # self.world._clear_dead_entities()
-        print("\nOrder Cancellation Phase started.")
+        log.debug("\nOrder Cancellation Phase started.")
         print_total_money(self.world, "Before Cancellation")
         sell_orders = self.world.get_component(SellOrder)
         buy_orders = self.world.get_component(BuyOrder)
-        print(f"Locks will be released for {len(sell_orders)} sell and {len(buy_orders)} buy orders still on market")
+        log.debug(f"Locks will be released for {len(sell_orders)} sell and {len(buy_orders)} buy orders still on market")
         for ent, buy_order in filter(lambda o: o[1].status == OrderStatus.UNPROCESSED, buy_orders):
             # we return money back as the order didn't happen
             self.cancel_buy_order(buy_order)
@@ -341,7 +342,7 @@ class Maturity(esper.Processor):
     def process(self):
         for ent, (details, storage) in self.world.get_components(Details, Storage):
             if storage.has_one(Resource.GROWN_HUMAN):
-                print(f"{details.name} created a grown human!")
+                log.warning(f"{details.name} created a grown human!")
                 storage.remove_one_of(ResourcePile(Resource.GROWN_HUMAN))
                 # FIXME cloning center should also have bought this water
                 # FIXME those values should be constant and same as for other people in the world
@@ -356,12 +357,12 @@ class Death(esper.Processor):
     def process(self):
         for _, (pool_storage, pool_wallet, _) in self.world.get_components(Storage, Wallet, InheritancePool):
             for ent, (details, storage, wallet, _) in self.world.get_components(Details, Storage, Wallet, Hunger):
-                print(f"{details.name} died of hunger")
+                log.warning(f"{details.name} died of hunger")
                 storage.add_one_of(Resource.SOUL)
                 pool_storage.add_all(storage)
                 pool_wallet.money += wallet.money
                 self.world.add_component(ent, Terminated())
-            print(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
+            log.debug(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
 
 class InheritanceLottery(esper.Processor):
     def __init__(self):
@@ -373,12 +374,12 @@ class InheritanceLottery(esper.Processor):
                 winner, (details, storage, wallet) = choice(self.world.get_components(Details, Storage, Wallet))
                 half, _ = pool_wallet.money.split()
                 if not self.world.has_component(winner, Terminated):
-                    print(f"{details.name} won {half} at the inheritance lottery!")
+                    log.debug(f"{details.name} won {half} at the inheritance lottery!")
                     wallet.money += half
                     pool_wallet.money -= half
                 else:
-                    print(f"{details.name} won {half} at the inheritance lottery but was already dead!")
-                print(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
+                    log.debug(f"{details.name} won {half} at the inheritance lottery but was already dead!")
+                log.debug(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
 
 class WealthRedistribution(esper.Processor):
     def __init__(self, tax_rate: float = 0):
@@ -406,7 +407,7 @@ class WealthRedistribution(esper.Processor):
         # last one gets whats left
         if last_wallet is not None:
             last_wallet.money += money_for_redistribution
-        print(f"Ubi this round is: {ubi_value}")
+        log.info(f"Ubi this round is: {ubi_value}")
         assert money_before_redistribution == total_money_in_wallets(self.world), f"Redistributing money should not change the amount of it: {money_before_redistribution} changed to {total_money_in_wallets(self.world)}"
 
 
@@ -421,7 +422,7 @@ class StatisticsUpdate(esper.Processor):
 
 def print_total_money(world, where):
     total_money = total_money_in_wallets(world)
-    print(f"\n\nTotal money: {total_money}. ({where})")
+    log.debug(f"Total money: {total_money}. ({where})")
 
 
 def total_money_in_wallets(world) -> Money:
@@ -441,19 +442,19 @@ class TurnSummaryProcessor(esper.Processor):
 
     def process(self):
         print_total_money(self.world, "Turn end")
-        print(f"Prices in {globals.star_date}:")
+        log.info(f"Prices in {globals.star_date}:")
         for resource in Resource:
             if globals.stats_history.has_stats_for_day(globals.star_date, resource):
-                print(globals.stats_history.stats_for_day(globals.star_date, resource))
+                log.info(globals.stats_history.stats_for_day(globals.star_date, resource))
             self.ticker.log_transactions(resource)
 
-        print("Richest entities:")
+        log.info("Richest entities:")
         money_in_rich_pockets = Money(0)
         for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet),
                                                        key=lambda x: -x[1][2].money.creds)[0:5]:
-            print(f"{details.name} has {wallets.money} left. Storage: {storage}")
+            log.info(f"{details.name} has {wallets.money} left. Storage: {storage}")
             money_in_rich_pockets += wallets.money
-        print(f"Richest have {money_in_rich_pockets} accounting for {money_in_rich_pockets.creds/total_money_in_wallets(self.world).creds*100:.2f}% of total money")
+        log.info(f"Richest have {money_in_rich_pockets} accounting for {money_in_rich_pockets.creds/total_money_in_wallets(self.world).creds*100:.2f}% of total money")
 
 class Cleanup(esper.Processor):
     def __init__(self):
