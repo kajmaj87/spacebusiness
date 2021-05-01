@@ -95,7 +95,7 @@ class Storage:
         else:
             raise Exception(f"Attempted to overfill storage with {resource}")
 
-    def add_all(self, storage: 'Storage'):
+    def add_all(self, storage: "Storage"):
         for resource in storage.stored_resources:
             self.add(ResourcePile(resource, storage.stored_resources[resource]))
 
@@ -133,7 +133,6 @@ class Storage:
 
 @icontract.invariant(lambda self: self.creds >= 0, "Money cannot become negative")
 class Money:
-
     def __init__(self, creds: int):
         if not isinstance(creds, int):
             raise TypeError(f"Expected {int} but got {type(creds)}")
@@ -161,16 +160,16 @@ class Money:
     def __int__(self):
         return self.creds
 
-    def __add__(self, other: 'Money') -> 'Money':
+    def __add__(self, other: "Money") -> "Money":
         return Money(self.creds + other.creds)
 
-    def __sub__(self, other: 'Money') -> 'Money':
+    def __sub__(self, other: "Money") -> "Money":
         return Money(self.creds - other.creds)
 
-    def multiply(self, multiplier: float) -> 'Money':
+    def multiply(self, multiplier: float) -> "Money":
         return Money(int(self.creds * multiplier))
 
-    def split(self) -> Tuple['Money', 'Money']:
+    def split(self) -> Tuple["Money", "Money"]:
         result = (Money(self.creds // 2 + self.creds % 2), Money(self.creds // 2))
         assert result[0].creds + result[1].creds == self.creds
         # give last penny out randomly
@@ -179,7 +178,7 @@ class Money:
         else:
             return result[1], result[0]
 
-    def remove(self, money: 'Money') -> 'Money':
+    def remove(self, money: "Money") -> "Money":
         if not isinstance(money, Money):
             raise TypeError(f"Expected {Money} but got {type(money)}")
         else:
@@ -187,7 +186,6 @@ class Money:
 
 
 class Wallet:
-
     def __init__(self, money: Money):
         if not isinstance(money, Money):
             raise TypeError(f"Expected {Money} but got {type(money)}")
@@ -201,7 +199,7 @@ class Wallet:
         self.last_transaction[resource_type] = (price, status)
 
     @icontract.require(lambda order: order.status != OrderStatus.UNPROCESSED)
-    def register_order(self, order: Union['BuyOrder', 'SellOrder']):
+    def register_order(self, order: Union["BuyOrder", "SellOrder"]):
         self.last_transaction[order.resource] = (order.price, order.status)
 
     def last_transaction_details_for(self, resource_type: Resource):
@@ -217,15 +215,19 @@ class Consumer:
     def add_need(self, need: ResourcePile):
         self.needs.append(need)
 
+
 # marker interfaces
 class Hunger:
     pass
 
+
 class Terminated:
     pass
 
+
 class InheritancePool:
     pass
+
 
 class Producer:
     def __init__(self, needs: ResourcePile, gives: ResourcePile):
@@ -297,7 +299,7 @@ class BuyOrder:
         return f"Buy: {self.resource} for {self.price}"
 
 
-Stat = namedtuple('Stat', ['resource', 'order_type', 'length', 'min', 'median', 'max'])
+Stat = namedtuple("Stat", ["resource", "order_type", "length", "min", "median", "max"])
 
 
 class StarDate:
@@ -321,10 +323,17 @@ class StatsHistory:
     def __init__(self):
         self.history = {}
 
-    def register_day_transactions(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy,
-                                  fulfilled_sell, transactions: List[Money]):
-        self.history[(date.time, resource)] = StatsForDay(date, resource, all_buy, all_sell, fulfilled_buy,
-                                                          fulfilled_sell, transactions)
+    def register_day_transactions(
+        self,
+        date: StarDate,
+        resource: Resource,
+        all_buy,
+        all_sell,
+        fulfilled_buy,
+        fulfilled_sell,
+        transactions: List[Money],
+    ):
+        self.history[(date.time, resource)] = StatsForDay(date, resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell, transactions)
 
     def stats_for_day(self, date: StarDate, resource: Resource):
         return self.history[(date.time, resource)]
@@ -334,8 +343,16 @@ class StatsHistory:
 
 
 class StatsForDay:
-    def __init__(self, date: StarDate, resource: Resource, all_buy, all_sell, fulfilled_buy, fulfilled_sell,
-                 transactions: List[Money]):
+    def __init__(
+        self,
+        date: StarDate,
+        resource: Resource,
+        all_buy,
+        all_sell,
+        fulfilled_buy,
+        fulfilled_sell,
+        transactions: List[Money],
+    ):
         self.fulfilled_sell = self.calculate_base_stats(resource, OrderType.SELL, fulfilled_sell)
         self.fulfilled_buy = self.calculate_base_stats(resource, OrderType.BUY, fulfilled_buy)
         self.transactions = self.calculate_stats_for_prices(resource, OrderType.TRANSACTION, transactions)
@@ -366,8 +383,14 @@ class StatsForDay:
     def calculate_stats_for_prices(self, resource: Resource, order_type: OrderType, prices: List[Money]) -> Stat:
         if len(prices) > 0:
             median = Money(statistics.median_low([p.creds for p in prices]))
-            return Stat(resource=resource, order_type=order_type, length=len(prices), min=min(prices), median=median,
-                        max=max(prices))
+            return Stat(
+                resource=resource,
+                order_type=order_type,
+                length=len(prices),
+                min=min(prices),
+                median=median,
+                max=max(prices),
+            )
         else:
             return Stat(resource=resource, order_type=order_type, length=len(prices), min=None, median=None, max=None)
 

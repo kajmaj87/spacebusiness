@@ -1,5 +1,5 @@
 from random import random, choice, randint
-from typing import Tuple, Union, List
+from typing import List
 from log import log
 
 import esper  # type: ignore
@@ -7,8 +7,24 @@ import statistics
 
 import icontract as icontract
 
-from components import Storage, Consumer, Details, Producer, SellOrder, ResourcePile, BuyOrder, Wallet, Resource, \
-    Needs, OrderStatus, Need, Money, Hunger, InheritancePool, Terminated
+from components import (
+    Storage,
+    Consumer,
+    Details,
+    Producer,
+    SellOrder,
+    ResourcePile,
+    BuyOrder,
+    Wallet,
+    Resource,
+    Needs,
+    OrderStatus,
+    Need,
+    Money,
+    Hunger,
+    InheritancePool,
+    Terminated,
+)
 from entities import create_person
 from transaction_logger import Ticker
 import globals
@@ -26,7 +42,9 @@ class Timeflow(esper.Processor):
             self.total_money_at_start = total_money_in_wallets(self.world)
         if self.total_money_at_start.creds != total_money_in_wallets(self.world).creds:
             raise Exception(
-                f"Total money changed from {self.total_money_at_start} to {total_money_in_wallets(self.world)}. (diff {self.total_money_at_start.creds - total_money_in_wallets(self.world).creds}cr)")
+                f"Total money changed from {self.total_money_at_start} to {total_money_in_wallets(self.world)}. "
+                f"(diff {self.total_money_at_start.creds - total_money_in_wallets(self.world).creds}cr)"
+            )
 
 
 class Consumption(esper.Processor):
@@ -55,7 +73,7 @@ class Production(esper.Processor):
         super().__init__()
 
     def process(self):
-        log.debug(f"\nProduction Phase started")
+        log.debug("Production Phase started")
         producers = self.world.get_components(Details, Storage, Producer)
         for ent, (details, storage, producer) in producers:
             while storage.has_at_least(producer.needed_pile()) and storage.will_fit(producer.created_pile()):
@@ -85,19 +103,17 @@ class Ordering(esper.Processor):
         else:
             if status == OrderStatus.BOUGHT:
                 bid_price = last_price.multiply(need.price_change_on_buy)
-                log.debug(
-                    f"{details.name} bought {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
+                log.debug(f"{details.name} bought {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
             elif status == OrderStatus.CANCELLED:
                 if globals.stats_history.has_stats_for_day(globals.star_date.yesterday(), need.resource_type()):
-                    #yesterday_stats = globals.stats_history.stats_for_day(globals.star_date.yesterday(), need.resource_type())
-                    #median = yesterday_stats.sell_stats.median
-                    #bid_price = (median + last_price).split()[0] if median is not None else last_price
+                    # yesterday_stats = globals.stats_history.stats_for_day(globals.star_date.yesterday(), need.resource_type())
+                    # median = yesterday_stats.sell_stats.median
+                    # bid_price = (median + last_price).split()[0] if median is not None else last_price
                     bid_price = max(last_price.multiply(need.price_change_on_failed_buy), last_price + Money(1))
-                    log.debug( f"{details.name} failed to buy {need.resource_type()} for {last_price}. Will try to order for {bid_price}")
+                    log.debug(f"{details.name} failed to buy {need.resource_type()} for {last_price}." f" Will try to order for {bid_price}")
                 else:
                     bid_price = last_price
-                    log.debug(
-                        f"{details.name} has no info about yesterday prices of {need.resource_type()}. Ordering for last price {last_price}")
+                    log.debug(f"{details.name} has no info about yesterday prices of {need.resource_type()}. Ordering for last price {last_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
         return max(bid_price, Money(1))
@@ -111,7 +127,8 @@ class Ordering(esper.Processor):
             else:
                 if wallet.money < max_bid_price:
                     log.debug(
-                        f"{details.name} did not affort {max_bid_price} to order {resouce}. Has only {wallet.money} left. Will bid for this amount instead")
+                        f"{details.name} did not affort {max_bid_price} to order {resouce}. Has only {wallet.money} left. Will bid for this amount instead"
+                    )
                 bid = min(max_bid_price, wallet.money)
                 if wallet.money.creds > 0:
                     wallet.money -= bid
@@ -144,16 +161,13 @@ class Ordering(esper.Processor):
                 # TODO Should be handled more in a way as needs are
                 # don't get stuck at small values
                 bid_price = max(last_price.multiply(1.1), last_price + Money(1))
-                log.debug(
-                    f"{details.name} sold {resource_type} for {last_price}. Will try to sell for {bid_price}")
+                log.debug(f"{details.name} sold {resource_type} for {last_price}. Will try to sell for {bid_price}")
             elif status == OrderStatus.CANCELLED:
                 bid_price = last_price.multiply(0.9)
-                log.debug(
-                    f"{details.name} failed to sell {resource_type} for {last_price}. Will try to sell for {bid_price}")
+                log.debug(f"{details.name} failed to sell {resource_type} for {last_price}. Will try to sell for {bid_price}")
             else:
                 raise Exception(f"Unexpected transaction status: {status}")
-        return max(bid_price, Money(
-            1))  # TODO make it more sensible, wallet should take all transactions from last turn into account
+        return max(bid_price, Money(1))  # TODO make it more sensible, wallet should take all transactions from last turn into account
 
     def create_sell_orders(self):
         def create_sell_order(owner, resource: Resource, min_bid_price: Money) -> SellOrder:
@@ -178,13 +192,16 @@ class Exchange(esper.Processor):
 
     def create_order_pairs(self, buy_orders, sell_orders):
         if len(sell_orders) < len(buy_orders):
-            order_pairs = zip(buy_orders[len(buy_orders) - len(sell_orders):], sell_orders)
+            order_pairs = zip(buy_orders[len(buy_orders) - len(sell_orders) :], sell_orders)
         else:
-            order_pairs = zip(buy_orders, sell_orders[:len(buy_orders)])
+            order_pairs = zip(buy_orders, sell_orders[: len(buy_orders)])
         return order_pairs
 
     @icontract.snapshot(lambda self: self)
-    @icontract.ensure(lambda OLD, self: total_money_locked_in_orders(self.world) + total_money_in_wallets(self.world) == total_money_locked_in_orders(OLD.self.world) + total_money_in_wallets(OLD.self.world))
+    @icontract.ensure(
+        lambda OLD, self: total_money_locked_in_orders(self.world) + total_money_in_wallets(self.world)
+        == total_money_locked_in_orders(OLD.self.world) + total_money_in_wallets(OLD.self.world)
+    )
     def process(self):
         def order_pairs_are_valid(buy_orders, sell_orders):
             for buy, sell in self.create_order_pairs(buy_orders, sell_orders):
@@ -217,27 +234,28 @@ class Exchange(esper.Processor):
                 eligible_buy, eligible_sell = fix_orders(eligible_buy, eligible_sell)
 
             transactions = self.process_orders(eligible_buy, eligible_sell)
-            globals.stats_history.register_day_transactions(globals.star_date, resource_type, all_buy=filtered_buys,
-                                                            all_sell=filtered_sells, fulfilled_buy=eligible_buy,
-                                                            fulfilled_sell=eligible_sell, transactions=transactions)
+            globals.stats_history.register_day_transactions(
+                globals.star_date,
+                resource_type,
+                all_buy=filtered_buys,
+                all_sell=filtered_sells,
+                fulfilled_buy=eligible_buy,
+                fulfilled_sell=eligible_sell,
+                transactions=transactions,
+            )
 
     @icontract.require(lambda buy_order, sell_order: buy_order.price >= sell_order.price)
-    @icontract.ensure(lambda result, buy_order, sell_order: abs(2*result.creds - (buy_order.price + sell_order.price).creds) <= 1)
-    @icontract.ensure(
-        lambda buy_order, sell_order: buy_order.status == OrderStatus.BOUGHT and sell_order.status == OrderStatus.SOLD)
+    @icontract.ensure(lambda result, buy_order, sell_order: abs(2 * result.creds - (buy_order.price + sell_order.price).creds) <= 1)
+    @icontract.ensure(lambda buy_order, sell_order: buy_order.status == OrderStatus.BOUGHT and sell_order.status == OrderStatus.SOLD)
     def process_transaction(self, buy_order: BuyOrder, sell_order: SellOrder) -> Money:
         if buy_order.price < sell_order.price:
-            raise Exception(f"Attempted to buy at lower price then seller wanted")
+            raise Exception("Attempted to buy at lower price then seller wanted")
         transaction_price, _ = (buy_order.price + sell_order.price).split()
         self.world.component_for_entity(sell_order.owner, Wallet).money += transaction_price
-        self.world.component_for_entity(sell_order.owner, Wallet).register_transaction(sell_order.resource,
-                                                                                       transaction_price,
-                                                                                       OrderStatus.SOLD)
+        self.world.component_for_entity(sell_order.owner, Wallet).register_transaction(sell_order.resource, transaction_price, OrderStatus.SOLD)
         # buyer gets a refund from what he payed upfront when creating order
         self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price - transaction_price
-        self.world.component_for_entity(buy_order.owner, Wallet).register_transaction(sell_order.resource,
-                                                                                      transaction_price,
-                                                                                      OrderStatus.BOUGHT)
+        self.world.component_for_entity(buy_order.owner, Wallet).register_transaction(sell_order.resource, transaction_price, OrderStatus.BOUGHT)
         self.world.component_for_entity(buy_order.owner, Storage).add_one_of(sell_order.resource)
         # Orders are deleted in cleanup phase
         sell_order.status = OrderStatus.SOLD
@@ -250,9 +268,9 @@ class Exchange(esper.Processor):
     def process_orders(self, buy_orders, sell_orders) -> List[Money]:
         if len(sell_orders) < len(buy_orders):
             self.report_orders(sell_orders, "chosen sell")
-            self.report_orders(buy_orders[len(buy_orders) - len(sell_orders):], " chosen buy")
+            self.report_orders(buy_orders[len(buy_orders) - len(sell_orders) :], " chosen buy")
         else:
-            self.report_orders(sell_orders[:len(buy_orders)], "chosen sell")
+            self.report_orders(sell_orders[: len(buy_orders)], "chosen sell")
             self.report_orders(buy_orders, " chosen buy")
 
         transactions = []
@@ -280,11 +298,9 @@ class Exchange(esper.Processor):
             return [], []
         max_buy = max(buy_orders, key=lambda x: x[1].price)[1].price
         min_sell = min(sell_orders, key=lambda x: x[1].price)[1].price
-        return sorted(
-            [(ent, o) for ent, o in sell_orders if o.price <= max_buy],
-            key=lambda x: x[1].price), sorted(
-            [(ent, o) for ent, o in buy_orders if o.price >= min_sell],
-            key=lambda x: x[1].price)
+        return sorted([(ent, o) for ent, o in sell_orders if o.price <= max_buy], key=lambda x: x[1].price), sorted(
+            [(ent, o) for ent, o in buy_orders if o.price >= min_sell], key=lambda x: x[1].price
+        )
 
 
 class OrderCancellation(esper.Processor):
@@ -298,7 +314,7 @@ class OrderCancellation(esper.Processor):
         self.world.component_for_entity(buy_order.owner, Wallet).money += buy_order.price
         buy_order.status = OrderStatus.CANCELLED
         self.world.component_for_entity(buy_order.owner, Wallet).register_order(buy_order)
-        #log.debug(f"{owner_name} gained {buy_order.price} back as the order for {buy_order.resource} was cancelled")
+        log.debug(f"{owner_name} gained {buy_order.price} back as the order for {buy_order.resource} was cancelled")
 
     @icontract.require(lambda sell_order: sell_order.status == OrderStatus.UNPROCESSED)
     @icontract.ensure(lambda sell_order: sell_order.status == OrderStatus.CANCELLED)
@@ -308,10 +324,13 @@ class OrderCancellation(esper.Processor):
         owner_storage.add_one_of(sell_order.resource)
         sell_order.status = OrderStatus.CANCELLED
         self.world.component_for_entity(sell_order.owner, Wallet).register_order(sell_order)
-        #log.debug(f"{owner_name} gained {sell_order.resource} back as the order for {sell_order.price} was cancelled")
+        log.debug(f"{owner_name} gained {sell_order.resource} back as the order for {sell_order.price} was cancelled")
 
     @icontract.snapshot(lambda self: self)
-    @icontract.ensure(lambda OLD, self: total_money_locked_in_orders(self.world) + total_money_in_wallets(self.world) == total_money_locked_in_orders(OLD.self.world) + total_money_in_wallets(OLD.self.world))
+    @icontract.ensure(
+        lambda OLD, self: total_money_locked_in_orders(self.world) + total_money_in_wallets(self.world)
+        == total_money_locked_in_orders(OLD.self.world) + total_money_in_wallets(OLD.self.world)
+    )
     def process(self):
         # self.world._clear_dead_entities()
         log.debug("\nOrder Cancellation Phase started.")
@@ -335,6 +354,7 @@ class OrderCancellation(esper.Processor):
 
         print_total_money(self.world, "After Cancellation")
 
+
 class Maturity(esper.Processor):
     def __init__(self):
         super().__init__()
@@ -346,8 +366,15 @@ class Maturity(esper.Processor):
                 storage.remove_one_of(ResourcePile(Resource.GROWN_HUMAN))
                 # FIXME cloning center should also have bought this water
                 # FIXME those values should be constant and same as for other people in the world
-                create_person(self.world, f"Clone-{randint(0,10000)}", food_consumption=0.5, food_amount=5, water_amount=5, water_consumption=0.25, money=0)
-
+                create_person(
+                    self.world,
+                    f"Clone-{randint(0,10000)}",
+                    food_consumption=0.5,
+                    food_amount=5,
+                    water_amount=5,
+                    water_consumption=0.25,
+                    money=0,
+                )
 
 
 class Death(esper.Processor):
@@ -363,6 +390,7 @@ class Death(esper.Processor):
                 pool_wallet.money += wallet.money
                 self.world.add_component(ent, Terminated())
             log.debug(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
+
 
 class InheritanceLottery(esper.Processor):
     def __init__(self):
@@ -381,6 +409,7 @@ class InheritanceLottery(esper.Processor):
                     log.debug(f"{details.name} won {half} at the inheritance lottery but was already dead!")
                 log.debug(f"Inheritance pool contents: {pool_wallet.money} and {pool_storage}")
 
+
 class WealthRedistribution(esper.Processor):
     def __init__(self, tax_rate: float = 0):
         super().__init__()
@@ -398,7 +427,7 @@ class WealthRedistribution(esper.Processor):
                 tax = wallet.money.multiply(self.tax_rate)
                 money_for_redistribution += tax
                 wallet.money -= tax
-        ubi_value = money_for_redistribution.multiply(1/total_wallets)
+        ubi_value = money_for_redistribution.multiply(1 / total_wallets)
         for ent, wallet in self.world.get_component(Wallet):
             if not self.world.has_component(ent, Terminated):
                 money_for_redistribution -= ubi_value
@@ -408,8 +437,9 @@ class WealthRedistribution(esper.Processor):
         if last_wallet is not None:
             last_wallet.money += money_for_redistribution
         log.info(f"Ubi this round is: {ubi_value}")
-        assert money_before_redistribution == total_money_in_wallets(self.world), f"Redistributing money should not change the amount of it: {money_before_redistribution} changed to {total_money_in_wallets(self.world)}"
-
+        assert money_before_redistribution == total_money_in_wallets(
+            self.world
+        ), f"Redistributing money should not change the amount of it: {money_before_redistribution} changed to {total_money_in_wallets(self.world)}"
 
 
 class StatisticsUpdate(esper.Processor):
@@ -450,11 +480,13 @@ class TurnSummaryProcessor(esper.Processor):
 
         log.info("Richest entities:")
         money_in_rich_pockets = Money(0)
-        for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet),
-                                                       key=lambda x: -x[1][2].money.creds)[0:5]:
+        for ent, (details, storage, wallets) in sorted(self.world.get_components(Details, Storage, Wallet), key=lambda x: -x[1][2].money.creds)[0:5]:
             log.info(f"{details.name} has {wallets.money} left. Storage: {storage}")
             money_in_rich_pockets += wallets.money
-        log.info(f"Richest have {money_in_rich_pockets} accounting for {money_in_rich_pockets.creds/total_money_in_wallets(self.world).creds*100:.2f}% of total money")
+        log.info(
+            f"Richest have {money_in_rich_pockets} accounting for {money_in_rich_pockets.creds/total_money_in_wallets(self.world).creds*100:.2f}% of total cr"
+        )
+
 
 class Cleanup(esper.Processor):
     def __init__(self):
