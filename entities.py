@@ -85,4 +85,3 @@ def create_cloning_center(world, name, embryo_storage, embryo_food_cost, money):
     world.add_component(cloning_center, storage)
     world.add_component(cloning_center, needs)
     return cloning_center
-

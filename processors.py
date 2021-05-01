@@ -463,5 +463,3 @@ class Cleanup(esper.Processor):
     def process(self):
         for ent, terminated in self.world.get_component(Terminated):
             self.world.delete_entity(ent)
-
-
