@@ -4,20 +4,18 @@ import esper  # type: ignore
 
 from components import StatsHistory, StarDate, Storage, Wallet, InheritancePool, Money, Details
 from entities import create_person, create_farm, create_well, create_cloning_center
-from processors import (
-    TurnSummaryProcessor,
-    Consumption,
-    Production,
-    Ordering,
-    Exchange,
-    OrderCancellation,
-    Timeflow,
-    Death,
-    InheritanceLottery,
-    Cleanup,
-    WealthRedistribution,
-    Maturity,
-)
+from processors.cleanup import Cleanup
+from processors.summary import TurnSummaryProcessor
+from processors.wealth_redistribution import WealthRedistribution
+from processors.inheritance import InheritanceLottery
+from processors.death import Death
+from processors.maturity import Maturity
+from processors.order_cancellation import OrderCancellation
+from processors.exchange import Exchange
+from processors.ordering import Ordering
+from processors.production import Production
+from processors.consumption import Consumption
+from processors.timeflow import Timeflow
 
 
 def createManyEntities(world):

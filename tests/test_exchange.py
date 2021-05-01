@@ -4,7 +4,7 @@ from hypothesis import given
 import hypothesis.strategies as st
 
 from components import Money, Wallet, Storage, Resource, SellOrder, BuyOrder, OrderStatus
-from processors import Exchange
+from processors.exchange import Exchange
 
 
 def prepare_transaction_arguments(world, buyer_money, seller_money, buy_price, sell_price):
