@@ -57,3 +57,65 @@ def test_process_transaction(buyer_money, seller_money, buy_price, sell_price):
     # buyer did not have anything before exchange
     assert world.component_for_entity(buyer, Storage).amount(Resource.FOOD) == 1, "Buyer did not get what he bought"
     assert buy_order.status == OrderStatus.BOUGHT
+
+
+@given(
+    buy_price=st.integers(min_value=1),
+    sell_price=st.integers(min_value=1),
+)
+def test_whole_process_method_single_transaction(buy_price, sell_price):
+    world = esper.World()
+    exchange = Exchange()
+    exchange.world = world
+    world.add_processor(exchange)
+    buyer = world.create_entity(Wallet(Money(0)), Storage())
+    seller = world.create_entity(Wallet(Money(0)), Storage())
+    buy = BuyOrder(buyer, Resource.FOOD, Money(buy_price))
+    sell = SellOrder(seller, Resource.FOOD, Money(sell_price))
+    world.create_entity(buy)
+    world.create_entity(sell)
+
+    world.process()
+
+    if buy_price >= sell_price:
+        assert buy.status == OrderStatus.BOUGHT
+        assert sell.status == OrderStatus.SOLD
+    else:
+        assert buy.status == OrderStatus.UNPROCESSED
+        assert sell.status == OrderStatus.UNPROCESSED
+
+
+@given(
+    buy_prices=st.lists(st.integers(min_value=1, max_value=1000)),
+    sell_prices=st.lists(st.integers(min_value=1, max_value=1000)),
+)
+def test_fair_transaction_assignment(buy_prices, sell_prices):
+    world = esper.World()
+    exchange = Exchange()
+    exchange.world = world
+    world.add_processor(exchange)
+    buy_orders = []
+    sell_orders = []
+    for buy_price in buy_prices:
+        buyer = world.create_entity(Wallet(Money(0)), Storage())
+        buy = BuyOrder(buyer, Resource.FOOD, Money(buy_price))
+        buy_orders.append(buy)
+        world.create_entity(buy)
+    for sell_price in sell_prices:
+        seller = world.create_entity(Wallet(Money(0)), Storage())
+        sell = SellOrder(seller, Resource.FOOD, Money(sell_price))
+        sell_orders.append(sell)
+        world.create_entity(sell)
+
+    world.process()
+
+    buy_orders = sorted(buy_orders, key=lambda x: x.price)
+    sell_orders = sorted(sell_orders, key=lambda x: x.price)
+
+    for cheap, expensive in zip(buy_orders, buy_orders[1:]):
+        if cheap.price < expensive.price and cheap.status == OrderStatus.BOUGHT:
+            assert expensive.status == OrderStatus.BOUGHT
+
+    for cheap, expensive in zip(sell_orders, sell_orders[1:]):
+        if cheap.price < expensive.price and expensive.status == OrderStatus.SOLD:
+            assert cheap.status == OrderStatus.SOLD
