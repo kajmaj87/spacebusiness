@@ -1,8 +1,4 @@
-from components import (
-    BuyOrder,
-    Wallet,
-    Money,
-)
+from components import BuyOrder, Money, Wallet
 
 
 def total_money_in_wallets(world) -> Money:

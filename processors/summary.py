@@ -1,10 +1,11 @@
 import esper
 
 import globals
-from components import Resource, Money, Details, Storage, Wallet
+from components import Details, Money, Resource, Storage, Wallet
 from log import log
-from .pure import total_money_in_wallets
 from transaction_logger import Ticker
+
+from .pure import total_money_in_wallets
 
 
 class TurnSummaryProcessor(esper.Processor):

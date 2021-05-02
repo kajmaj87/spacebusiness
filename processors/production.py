@@ -1,6 +1,6 @@
 import esper
 
-from components import Details, Storage, Producer
+from components import Details, Producer, Storage
 from log import log
 
 

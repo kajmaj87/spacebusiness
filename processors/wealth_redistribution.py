@@ -1,8 +1,9 @@
 import esper
 import icontract as icontract
 
-from components import Money, Wallet, Terminated
+from components import Money, Terminated, Wallet
 from log import log
+
 from .pure import total_money_in_wallets
 
 

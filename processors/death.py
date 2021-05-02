@@ -1,6 +1,14 @@
 import esper
 
-from components import Storage, Wallet, InheritancePool, Details, Hunger, Resource, Terminated
+from components import (
+    Details,
+    Hunger,
+    InheritancePool,
+    Resource,
+    Storage,
+    Terminated,
+    Wallet,
+)
 from log import log
 
 

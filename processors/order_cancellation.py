@@ -1,9 +1,18 @@
 import esper
 import icontract as icontract
 
-from components import OrderStatus, BuyOrder, Details, Wallet, SellOrder, Storage, Terminated
+from components import (
+    BuyOrder,
+    Details,
+    OrderStatus,
+    SellOrder,
+    Storage,
+    Terminated,
+    Wallet,
+)
 from log import log
-from .pure import total_money_locked_in_orders, total_money_in_wallets
+
+from .pure import total_money_in_wallets, total_money_locked_in_orders
 
 
 class OrderCancellation(esper.Processor):

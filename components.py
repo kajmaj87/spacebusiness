@@ -1,11 +1,11 @@
 import statistics
 from collections import defaultdict, namedtuple
+from enum import Enum
 from random import random
-from typing import Dict, Tuple, List, Union
+from typing import Dict, List, Tuple, Union
 
 import icontract
 from sortedcontainers import SortedList  # type: ignore
-from enum import Enum
 
 
 class OrderType(Enum):

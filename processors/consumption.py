@@ -1,6 +1,6 @@
 import esper
 
-from components import Storage, ResourcePile, Resource, Hunger, Details, Consumer
+from components import Consumer, Details, Hunger, Resource, ResourcePile, Storage
 from log import log
 
 

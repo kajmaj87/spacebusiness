@@ -1,14 +1,14 @@
 from components import (
     Consumer,
-    ResourcePile,
-    Resource,
     Details,
-    Storage,
-    Producer,
-    Wallet,
-    Needs,
-    Need,
     Money,
+    Need,
+    Needs,
+    Producer,
+    Resource,
+    ResourcePile,
+    Storage,
+    Wallet,
 )
 
 

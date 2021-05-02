@@ -2,6 +2,7 @@ import esper
 
 import globals
 from log import log
+
 from .pure import total_money_in_wallets
 
 

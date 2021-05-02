@@ -5,9 +5,18 @@ import esper
 import icontract as icontract
 
 import globals
-from components import SellOrder, BuyOrder, Resource, OrderStatus, Money, Wallet, Storage
+from components import (
+    BuyOrder,
+    Money,
+    OrderStatus,
+    Resource,
+    SellOrder,
+    Storage,
+    Wallet,
+)
 from log import log
-from .pure import total_money_locked_in_orders, total_money_in_wallets
+
+from .pure import total_money_in_wallets, total_money_locked_in_orders
 
 
 class Exchange(esper.Processor):

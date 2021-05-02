@@ -3,7 +3,19 @@ from random import random
 import esper
 
 import globals
-from components import Details, Need, Wallet, OrderStatus, Money, Resource, BuyOrder, Storage, Needs, SellOrder, Producer
+from components import (
+    BuyOrder,
+    Details,
+    Money,
+    Need,
+    Needs,
+    OrderStatus,
+    Producer,
+    Resource,
+    SellOrder,
+    Storage,
+    Wallet,
+)
 from log import log
 
 

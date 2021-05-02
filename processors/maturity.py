@@ -2,7 +2,7 @@ from random import randint
 
 import esper
 
-from components import Details, Storage, Resource, ResourcePile
+from components import Details, Resource, ResourcePile, Storage
 from entities import create_person
 from log import log
 

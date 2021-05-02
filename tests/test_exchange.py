@@ -1,9 +1,16 @@
 import esper
-
-from hypothesis import given
 import hypothesis.strategies as st
+from hypothesis import given
 
-from components import Money, Wallet, Storage, Resource, SellOrder, BuyOrder, OrderStatus
+from components import (
+    BuyOrder,
+    Money,
+    OrderStatus,
+    Resource,
+    SellOrder,
+    Storage,
+    Wallet,
+)
 from processors.exchange import Exchange
 
 

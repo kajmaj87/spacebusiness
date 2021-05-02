@@ -2,7 +2,7 @@ from random import choice
 
 import esper
 
-from components import Storage, Wallet, InheritancePool, Details, Terminated
+from components import Details, InheritancePool, Storage, Terminated, Wallet
 from log import log
 
 
